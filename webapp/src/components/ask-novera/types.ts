@@ -29,6 +29,8 @@ export interface NoveraChatMessage {
   timestamp: Date;
   /** Active domain bucket assigned by the router */
   bucket?: string;
+  /** Whether this message represents an error response */
+  isError?: boolean;
 }
 
 /** Request payload expected by Agent Orchestrator POST /chat. */

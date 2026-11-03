@@ -14,7 +14,8 @@
 // under the License.
 
 import { describe, expect, it } from "vitest";
-import { matchDirectory } from "./directoryCatalog";
+import type { Capability } from "@constants/appMenu";
+import { DIRECTORY_CATALOG, isDirectoryEntryPermitted, matchDirectory } from "./directoryCatalog";
 
 describe("matchDirectory best-match scoring", () => {
   it("prioritizes bucket match when provided", () => {
@@ -27,18 +28,18 @@ describe("matchDirectory best-match scoring", () => {
     expect(match?.id).toBe("settings");
   });
 
-  it("selects people-par-lead over me-team for multi-word 'team appraisal'", () => {
-    const match = matchDirectory("team appraisal");
+  it("selects people-par-lead over me-team for multi-word 'team appraisal' when user is a lead", () => {
+    const match = matchDirectory("team appraisal", null, new Set<Capability>(["lead"]));
     expect(match?.id).toBe("people-par-lead");
   });
 
-  it("selects people-par-lead over finance-approvals and me-par for 'par review'", () => {
-    const match = matchDirectory("par review");
+  it("selects people-par-lead over finance-approvals and me-par for 'par review' when user is a lead", () => {
+    const match = matchDirectory("par review", null, new Set<Capability>(["lead"]));
     expect(match?.id).toBe("people-par-lead");
   });
 
-  it("selects people-par-lead over me-team for 'lead par'", () => {
-    const match = matchDirectory("lead par");
+  it("selects people-par-lead over me-team for 'lead par' when user is a lead", () => {
+    const match = matchDirectory("lead par", null, new Set<Capability>(["lead"]));
     expect(match?.id).toBe("people-par-lead");
   });
 
@@ -51,5 +52,59 @@ describe("matchDirectory best-match scoring", () => {
     expect(matchDirectory("")).toBeUndefined();
     expect(matchDirectory("   ")).toBeUndefined();
     expect(matchDirectory("what is the wifi password?")).toBeUndefined();
+  });
+});
+
+describe("matchDirectory role-based capability filtering", () => {
+  const employeeCaps = new Set<Capability>(["employee"]);
+  const leadCaps = new Set<Capability>(["employee", "lead"]);
+  const adminCaps = new Set<Capability>(["employee", "admin"]);
+
+  it("hides admin-only Subscription Management from regular employees", () => {
+    const match = matchDirectory("manage subscriptions", null, employeeCaps);
+    expect(match?.id).not.toBe("people-subscriptions-manage");
+  });
+
+  it("reveals Subscription Management to admins", () => {
+    const match = matchDirectory("manage subscriptions", null, adminCaps);
+    expect(match?.id).toBe("people-subscriptions-manage");
+  });
+
+  it("hides Active Employees Report from regular employees", () => {
+    const match = matchDirectory("active employees", null, employeeCaps);
+    expect(match?.id).not.toBe("people-reports-active-employees");
+  });
+
+  it("reveals Active Employees Report to leads and admins", () => {
+    const leadMatch = matchDirectory("active employees", null, leadCaps);
+    expect(leadMatch?.id).toBe("people-reports-active-employees");
+
+    const adminMatch = matchDirectory("active employees", null, adminCaps);
+    expect(adminMatch?.id).toBe("people-reports-active-employees");
+  });
+
+  it("hides Master Data Org Structure from regular employees and leads", () => {
+    expect(matchDirectory("master data", null, employeeCaps)?.id).not.toBe(
+      "people-master-data-org-structure",
+    );
+    expect(matchDirectory("master data", null, leadCaps)?.id).not.toBe(
+      "people-master-data-org-structure",
+    );
+  });
+
+  it("reveals Master Data Org Structure to admins", () => {
+    const match = matchDirectory("master data", null, adminCaps);
+    expect(match?.id).toBe("people-master-data-org-structure");
+  });
+
+  it("allows open employee entries for all capability sets", () => {
+    expect(matchDirectory("leaves", null, employeeCaps)?.id).toBe("me-leave");
+    expect(matchDirectory("leaves", null, adminCaps)?.id).toBe("me-leave");
+  });
+
+  it("evaluates entry permission directly via isDirectoryEntryPermitted", () => {
+    const adminEntry = DIRECTORY_CATALOG.find((e) => e.id === "people-subscriptions-manage")!;
+    expect(isDirectoryEntryPermitted(adminEntry, employeeCaps)).toBe(false);
+    expect(isDirectoryEntryPermitted(adminEntry, adminCaps)).toBe(true);
   });
 });

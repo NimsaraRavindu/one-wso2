@@ -14,7 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import { useEffect, useRef, useState, type FormEvent, type JSX } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type JSX } from "react";
 import {
   Box,
   ColorSchemeImage,
@@ -33,6 +33,8 @@ import { landingPath } from "@config/landingConfig";
 import PinnedTabs from "@features/pinned/components/PinnedTabs";
 import PinThisPageButton from "@features/pinned/components/PinThisPageButton";
 import { usePinnedEntries } from "@features/pinned/usePinned";
+import { useUserInfo } from "@api/useUserInfo";
+import { capabilitiesFromPrivileges } from "@constants/appMenu";
 import ThemeSelect from "./ThemeSelect";
 import UserProfileMenu from "./UserProfileMenu";
 import { useNoveraChat } from "@components/ask-novera/useNoveraChat";
@@ -118,6 +120,11 @@ export default function TopBar({
 }: TopBarProps): JSX.Element {
   const hasPinned = usePinnedEntries().length > 0;
   const isNoveraEnabled = isPreviewEnabled("novera");
+  const userInfo = useUserInfo();
+  const userCaps = useMemo(
+    () => capabilitiesFromPrivileges(userInfo.data?.privileges),
+    [userInfo.data?.privileges],
+  );
   const [legacyOpen, setLegacyOpen] = useState(false);
   const [pillEl, setPillEl] = useState<HTMLElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -163,6 +170,10 @@ export default function TopBar({
   }, [onOpenAsk, hasExistingResults, isNoveraEnabled]);
 
   const executeSearch = (rawQuery: string) => {
+    if (isLoading) {
+      return;
+    }
+
     const query = rawQuery.trim();
     if (!query) {
       return;
@@ -182,7 +193,7 @@ export default function TopBar({
     }
 
     setLastSearchedQuery(query);
-    const matched = matchDirectory(query);
+    const matched = matchDirectory(query, null, userCaps);
     setMatchedDirectory(matched);
 
     if (matched && !matched.hasMcpCapability) {
@@ -469,6 +480,9 @@ export default function TopBar({
           onSendMessage={sendMessage}
           searchQuery={searchQuery}
           onSearch={(newQuery) => {
+            if (isLoading) {
+              return;
+            }
             setSearchQuery(newQuery);
             executeSearch(newQuery);
           }}
@@ -477,6 +491,7 @@ export default function TopBar({
             setLastSearchedQuery(newQuery);
           }}
           onClear={handleClear}
+          userCaps={userCaps}
         />
       )}
 

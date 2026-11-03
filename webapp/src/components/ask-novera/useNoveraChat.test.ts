@@ -170,4 +170,31 @@ describe("useNoveraChat generation tracking", () => {
     expect(result.current.messages[1].text).toBe("Response B");
     expect(result.current.activeBucket).toBe("PO_MENU");
   });
+
+  it("handles status error response by tagging message as error and omitting activeBucket", async () => {
+    mockAuthedPost.mockResolvedValueOnce({
+      status: "error",
+      response: "Unable to process leave request at this time",
+      bucket: "LEAVE_STANDARD",
+    });
+
+    const { result } = renderHook(() => useNoveraChat());
+
+    act(() => {
+      void result.current.sendMessage("Check leave");
+    });
+    await Promise.resolve();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.error).toBe("Unable to process leave request at this time");
+    expect(result.current.activeBucket).toBeNull();
+    expect(result.current.messages).toHaveLength(2);
+    expect(result.current.messages[1].isError).toBe(true);
+    expect(result.current.messages[1].text).toBe(
+      "Error: Unable to process leave request at this time",
+    );
+  });
 });

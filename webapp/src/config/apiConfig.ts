@@ -2405,6 +2405,9 @@ export const agentOrchestratorBackendUrl: string = stripTrailingSlashes(
   window.config?.ONE_WSO2_AGENT_ORCHESTRATOR_URL ?? "",
 );
 
+/**
+ * Whether the Agent Orchestrator backend URL is configured in runtime config.
+ */
 export function isAgentOrchestratorBackendConfigured(): boolean {
   return Boolean(agentOrchestratorBackendUrl);
 }

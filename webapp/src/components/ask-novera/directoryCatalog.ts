@@ -41,6 +41,7 @@ import {
   WalletIcon,
   WrenchIcon,
 } from "@wso2/oxygen-ui-icons-react";
+import type { Capability } from "@constants/appMenu";
 
 export const LEAVE_BUCKET = "LEAVE_STANDARD";
 
@@ -70,6 +71,8 @@ export interface DirectoryEntry {
    * If false, no navigation button is shown, and only the Novera AI Overview result is displayed.
    */
   hasWebApp: boolean;
+  /** Required user capabilities to see and access this directory entry in search */
+  requires?: Capability[];
   /** Search keywords and synonyms */
   keywords: string[];
 }
@@ -276,6 +279,7 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     icon: ClipboardCheckIcon,
     hasMcpCapability: false,
     hasWebApp: true,
+    requires: ["admin", "lead"],
     keywords: [
       "approve",
       "approvals",
@@ -396,6 +400,7 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     icon: TicketIcon,
     hasMcpCapability: false,
     hasWebApp: true,
+    requires: ["admin"],
     keywords: [
       "manage subscriptions",
       "commute admin",
@@ -415,6 +420,7 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     icon: ClipboardCheckIcon,
     hasMcpCapability: false,
     hasWebApp: true,
+    requires: ["admin", "lead"],
     keywords: [
       "lead par",
       "team appraisal",
@@ -434,6 +440,7 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     icon: UserRoundIcon,
     hasMcpCapability: false,
     hasWebApp: true,
+    requires: ["admin", "lead"],
     keywords: [
       "active employees",
       "employee report",
@@ -453,6 +460,7 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     icon: UserRoundMinusIcon,
     hasMcpCapability: false,
     hasWebApp: true,
+    requires: ["admin", "lead"],
     keywords: [
       "resignations",
       "resignation report",
@@ -472,6 +480,7 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     icon: DatabaseIcon,
     hasMcpCapability: false,
     hasWebApp: true,
+    requires: ["admin"],
     keywords: [
       "org structure",
       "master data",
@@ -700,16 +709,42 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
 ];
 
 /**
+ * Verifies whether the caller's capabilities allow viewing and accessing a directory entry.
+ *
+ * @param entry - The directory entry to check
+ * @param userCaps - The caller's capability set
+ * @returns True if the entry is permitted for the given capabilities
+ */
+export function isDirectoryEntryPermitted(
+  entry: DirectoryEntry,
+  userCaps?: Set<Capability>,
+): boolean {
+  if (!entry.requires || entry.requires.length === 0) {
+    return true;
+  }
+  const caps = userCaps ?? new Set<Capability>(["employee"]);
+  return entry.requires.some((r) => caps.has(r));
+}
+
+/**
  * Matches a directory entry from the user query text or from a resolved Agent Orchestrator bucket.
- * Bucket match takes precedence when provided.
+ * Bucket match takes precedence when provided. Entries requiring elevated capabilities are filtered
+ * out if the caller lacks the required role.
  *
  * @param query - The user query string.
  * @param bucket - Optional Agent Orchestrator domain bucket.
+ * @param userCaps - Optional caller capability set for role-based access filtering.
  * @returns The matched directory entry, or undefined if no match found.
  */
-export function matchDirectory(query: string, bucket?: string | null): DirectoryEntry | undefined {
+export function matchDirectory(
+  query: string,
+  bucket?: string | null,
+  userCaps?: Set<Capability>,
+): DirectoryEntry | undefined {
   if (bucket) {
-    const bucketMatch = DIRECTORY_CATALOG.find((entry) => entry.mcpBucket === bucket);
+    const bucketMatch = DIRECTORY_CATALOG.find(
+      (entry) => entry.mcpBucket === bucket && isDirectoryEntryPermitted(entry, userCaps),
+    );
     if (bucketMatch) {
       return bucketMatch;
     }
@@ -723,7 +758,7 @@ export function matchDirectory(query: string, bucket?: string | null): Directory
   const words = normalized.split(/[^a-z0-9_-]+/);
 
   for (const entry of DIRECTORY_CATALOG) {
-    if (entry.title.toLowerCase() === normalized) {
+    if (entry.title.toLowerCase() === normalized && isDirectoryEntryPermitted(entry, userCaps)) {
       return entry;
     }
   }
@@ -732,6 +767,10 @@ export function matchDirectory(query: string, bucket?: string | null): Directory
   let bestScore = 0;
 
   for (const entry of DIRECTORY_CATALOG) {
+    if (!isDirectoryEntryPermitted(entry, userCaps)) {
+      continue;
+    }
+
     for (const kw of entry.keywords) {
       let matched = false;
       if (kw === normalized) {

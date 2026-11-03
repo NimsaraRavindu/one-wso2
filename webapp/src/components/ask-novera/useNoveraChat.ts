@@ -105,6 +105,24 @@ export function useNoveraChat() {
           throw new Error("Received empty response from assistant.");
         }
 
+        if (result.status === "error") {
+          const errorText = result.response.startsWith("Error:")
+            ? result.response
+            : `Error: ${result.response}`;
+          setError(result.response);
+          setActiveBucket(null);
+
+          const errorMessage: NoveraChatMessage = {
+            id: `err-${Date.now()}`,
+            role: "assistant",
+            text: errorText,
+            timestamp: new Date(),
+            isError: true,
+          };
+          setMessages((prev) => [...prev, errorMessage]);
+          return;
+        }
+
         setActiveBucket(result.bucket ?? null);
 
         const assistantMessage: NoveraChatMessage = {

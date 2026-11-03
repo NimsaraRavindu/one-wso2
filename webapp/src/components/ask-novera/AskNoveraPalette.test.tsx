@@ -15,7 +15,7 @@
 // under the License.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import TopBar from "@components/top-bar/TopBar";
@@ -38,6 +38,16 @@ vi.mock("@hooks/useAsgardeoSub", () => ({
 
 vi.mock("@hooks/useAccessToken", () => ({
   useAccessToken: () => async () => "token",
+}));
+
+const mockUserInfo = vi.fn(() => ({
+  data: { privileges: [987] },
+  isLoading: false,
+  isError: false,
+}));
+
+vi.mock("@api/useUserInfo", () => ({
+  useUserInfo: () => mockUserInfo(),
 }));
 
 vi.mock("@components/top-bar/UserProfileMenu", () => ({
@@ -66,6 +76,11 @@ beforeEach(() => {
   localStorage.clear();
   __resetForTests();
   mockAuthedPost.mockReset();
+  mockUserInfo.mockReturnValue({
+    data: { privileges: [987] },
+    isLoading: false,
+    isError: false,
+  });
   window.config = {
     ...window.config,
     ONE_WSO2_AGENT_ORCHESTRATOR_URL: "http://localhost:8000",
@@ -183,6 +198,32 @@ describe("Ask Novera Search Bar and Results", () => {
 
     expect(screen.getByText("Expense Claims")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open Expenses App" })).toBeInTheDocument();
+  });
+
+  it("suppresses admin-only action card for standard employees", async () => {
+    renderTopBar();
+    const user = userEvent.setup();
+    const input = screen.getByPlaceholderText("Ask Novera");
+    await user.type(input, "manage subscriptions{Enter}");
+
+    expect(screen.queryByRole("button", { name: "Manage Subscriptions" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Subscription Management")).not.toBeInTheDocument();
+  });
+
+  it("shows admin-only action card for admin users", async () => {
+    mockUserInfo.mockReturnValue({
+      data: { privileges: [987, 999] },
+      isLoading: false,
+      isError: false,
+    });
+
+    renderTopBar();
+    const user = userEvent.setup();
+    const input = screen.getByPlaceholderText("Ask Novera");
+    await user.type(input, "manage subscriptions{Enter}");
+
+    expect(await screen.findByRole("button", { name: "Manage Subscriptions" })).toBeInTheDocument();
+    expect(screen.getAllByText("Manage Subscriptions").length).toBeGreaterThanOrEqual(1);
   });
 
   it("displays Cafeteria action card with accurate breakfast/lunch/snack hint without dinner orders", async () => {
@@ -397,6 +438,51 @@ describe("Ask Novera Search Bar and Results", () => {
     expect(mockAuthedPost).toHaveBeenCalledTimes(1);
   });
 
+  it("ignores canvas search submissions while an existing request is pending", async () => {
+    let resolveQueryA!: (value: unknown) => void;
+    mockAuthedPost.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveQueryA = resolve;
+        }),
+    );
+
+    renderTopBar();
+    const user = userEvent.setup();
+    const input = screen.getByPlaceholderText("Ask Novera");
+
+    // 1. Submit Query A
+    await user.type(input, "query A{Enter}");
+    expect(mockAuthedPost).toHaveBeenCalledTimes(1);
+
+    // 2. While Query A is in-flight, canvas is open. Submit Query B in the canvas input
+    const canvasInput = screen.getByPlaceholderText("Search or ask Novera...");
+    await user.clear(canvasInput);
+    await user.type(canvasInput, "query B{Enter}");
+
+    // Query B should NOT be sent because request A is in-flight
+    expect(mockAuthedPost).toHaveBeenCalledTimes(1);
+
+    // 3. Resolve Query A
+    await act(async () => {
+      resolveQueryA({
+        response: "Answer for query A",
+        status: "success",
+      });
+    });
+
+    expect(await screen.findByText("Answer for query A")).toBeInTheDocument();
+
+    // 4. Now that request A has completed, submitting Query B succeeds
+    mockAuthedPost.mockResolvedValueOnce({
+      response: "Answer for query B",
+      status: "success",
+    });
+    await user.clear(canvasInput);
+    await user.type(canvasInput, "query B{Enter}");
+    expect(mockAuthedPost).toHaveBeenCalledTimes(2);
+  });
+
   it("updates action button when follow-up query transitions domain bucket (e.g. leave to menu)", async () => {
     mockAuthedPost
       .mockResolvedValueOnce({
@@ -437,6 +523,56 @@ describe("Ask Novera Search Bar and Results", () => {
     expect(screen.getByText("Cafeteria")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open Cafeteria App" })).toBeInTheDocument();
     expect(screen.queryByText("Leave Management")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open Leave App" })).not.toBeInTheDocument();
+  });
+
+  it("hides previous turn action card while a follow-up query is in flight", async () => {
+    let resolveTurn2: (value: unknown) => void = () => {};
+    const turn2Promise = new Promise((resolve) => {
+      resolveTurn2 = resolve;
+    });
+
+    mockAuthedPost
+      .mockResolvedValueOnce({
+        response: "You currently have 14 days of annual leave remaining.",
+        status: "success",
+        bucket: "LEAVE_STANDARD",
+      })
+      .mockReturnValueOnce(turn2Promise);
+
+    renderTopBar();
+    const user = userEvent.setup();
+    const input = screen.getByPlaceholderText("Ask Novera");
+
+    // 1. Initial query matches Leave Management
+    await user.type(input, "Check my leave balance{Enter}");
+    expect(
+      await screen.findByText("You currently have 14 days of annual leave remaining."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open Leave App" })).toBeInTheDocument();
+
+    // 2. Submit follow-up query
+    const followUpInput = screen.getByPlaceholderText("Ask a follow-up...");
+    await user.type(followUpInput, "What is for lunch today?{Enter}");
+
+    // 3. While follow-up query is in-flight, previous action button must be hidden
+    expect(screen.queryByRole("button", { name: "Open Leave App" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Leave Management")).not.toBeInTheDocument();
+
+    // 4. Resolve follow-up query with Cafeteria bucket
+    await act(async () => {
+      resolveTurn2({
+        response: "Today's lunch features steamed basmati rice with chicken curry.",
+        status: "success",
+        bucket: "PO_MENU",
+      });
+    });
+
+    // 5. Cafeteria action button should now show up
+    expect(
+      await screen.findByText("Today's lunch features steamed basmati rice with chicken curry."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open Cafeteria App" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open Leave App" })).not.toBeInTheDocument();
   });
 

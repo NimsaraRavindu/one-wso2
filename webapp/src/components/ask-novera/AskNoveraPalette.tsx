@@ -25,6 +25,7 @@ import InputBase from "@mui/material/InputBase";
 import { keyframes } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
+import type { Capability } from "@constants/appMenu";
 import type { NoveraChatMessage } from "./types";
 import { matchDirectory, type DirectoryEntry } from "./directoryCatalog";
 import NoveraOverviewCard from "./NoveraOverviewCard";
@@ -77,6 +78,8 @@ interface AskNoveraPaletteProps {
   onFollowUpQuery?: (query: string) => void;
   /** Callback to clear the active search and close. */
   onClear?: () => void;
+  /** Optional user capabilities set for role-based catalog filtering. */
+  userCaps?: Set<Capability>;
 }
 
 /**
@@ -98,6 +101,7 @@ export default function AskNoveraPalette({
   searchQuery,
   onSearch,
   onFollowUpQuery,
+  userCaps,
 }: AskNoveraPaletteProps) {
   const navigate = useNavigate();
   const [followUpText, setFollowUpText] = useState("");
@@ -121,9 +125,9 @@ export default function AskNoveraPalette({
     const latestUser = [...messages].reverse().find((m) => m.role === "user");
 
     // 1. If the latest assistant response carries a domain bucket, it takes primary authority
-    const bucket = latestAssistant?.bucket ?? activeBucket;
+    const bucket = latestAssistant ? latestAssistant.bucket : activeBucket;
     if (bucket) {
-      const bucketMatch = matchDirectory("", bucket);
+      const bucketMatch = matchDirectory("", bucket, userCaps);
       if (bucketMatch) {
         return bucketMatch;
       }
@@ -131,18 +135,21 @@ export default function AskNoveraPalette({
 
     // 2. Fall back to matching directory keywords from the user's latest query
     if (latestUser?.text) {
-      const queryMatch = matchDirectory(latestUser.text);
+      const queryMatch = matchDirectory(latestUser.text, null, userCaps);
       if (queryMatch) {
         return queryMatch;
       }
     }
 
     return undefined;
-  }, [messages, activeBucket, matchedDirectory]);
+  }, [messages, activeBucket, matchedDirectory, userCaps]);
 
-  const showActionCard = Boolean(
-    actionEntry && actionEntry.hasWebApp && actionEntry.href && actionEntry.label,
-  );
+  const hasPendingTurn =
+    isLoading || (messages.length > 0 && messages[messages.length - 1]?.role === "user");
+
+  const showActionCard =
+    !hasPendingTurn &&
+    Boolean(actionEntry && actionEntry.hasWebApp && actionEntry.href && actionEntry.label);
 
   const panelRef = useRef<HTMLDivElement>(null);
   const canvasInputRef = useRef<HTMLInputElement>(null);
