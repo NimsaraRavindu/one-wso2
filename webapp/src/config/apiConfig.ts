@@ -2413,7 +2413,7 @@ export const isAgentOrchestratorConfigured = isAgentOrchestratorBackendConfigure
 export const agentOrchestratorUrl = agentOrchestratorBackendUrl;
 
 export const agentOrchestratorServiceUrls = {
-  // Multi-turn conversational chat stream endpoint with orchestrator routing.
+  // Multi-turn conversational chat JSON endpoint with orchestrator routing.
   chat: `${agentOrchestratorBackendUrl}/chat`,
   // Orchestrator readiness and health endpoint.
   health: `${agentOrchestratorBackendUrl}/health`,

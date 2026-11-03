@@ -35,6 +35,7 @@ function generateSessionId(prefix: string): string {
 export function useNoveraChat() {
   const hookId = useId().replace(/[^a-zA-Z0-9]/g, "");
   const sessionIdRef = useRef<string>(generateSessionId(`one-wso2-${hookId}`));
+  const generationRef = useRef<number>(0);
   const getAccessToken = useAccessToken();
 
   const [messages, setMessages] = useState<NoveraChatMessage[]>([]);
@@ -48,6 +49,8 @@ export function useNoveraChat() {
       if (!trimmedText || isLoading) {
         return;
       }
+
+      const generation = generationRef.current;
 
       setError(null);
       setActiveBucket(null);
@@ -76,6 +79,10 @@ export function useNoveraChat() {
 
       try {
         const accessToken = await getAccessToken();
+        if (generation !== generationRef.current) {
+          return;
+        }
+
         const payload: AgentOrchestratorChatRequest = {
           session_id: sessionIdRef.current,
           message: trimmedText,
@@ -89,6 +96,10 @@ export function useNoveraChat() {
           accessToken,
           payload,
         );
+
+        if (generation !== generationRef.current) {
+          return;
+        }
 
         if (!result || !result.response) {
           throw new Error("Received empty response from assistant.");
@@ -106,6 +117,10 @@ export function useNoveraChat() {
 
         setMessages((prev) => [...prev, assistantMessage]);
       } catch (err: unknown) {
+        if (generation !== generationRef.current) {
+          return;
+        }
+
         const humanizedMessage = humanizeHttpError(err);
         setError(humanizedMessage);
 
@@ -117,16 +132,20 @@ export function useNoveraChat() {
         };
         setMessages((prev) => [...prev, errorMessage]);
       } finally {
-        setIsLoading(false);
+        if (generation === generationRef.current) {
+          setIsLoading(false);
+        }
       }
     },
     [getAccessToken, isLoading],
   );
 
   const clearMessages = useCallback(() => {
+    generationRef.current += 1;
     setMessages([]);
     setError(null);
     setActiveBucket(null);
+    setIsLoading(false);
     sessionIdRef.current = generateSessionId(`one-wso2-${hookId}`);
   }, [hookId]);
 

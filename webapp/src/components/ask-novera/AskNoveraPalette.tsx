@@ -14,7 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import { Box, Button, ColorSchemeImage, Header, IconButton, Typography, alpha } from "@wso2/oxygen-ui";
+import { Box, Button, ColorSchemeImage, Dialog, Header, IconButton, Typography, alpha } from "@wso2/oxygen-ui";
 import {
   ExternalLinkIcon,
   SearchIcon,
@@ -22,7 +22,6 @@ import {
   XIcon,
 } from "@wso2/oxygen-ui-icons-react";
 import InputBase from "@mui/material/InputBase";
-import Portal from "@mui/material/Portal";
 import { keyframes } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
@@ -146,12 +145,18 @@ export default function AskNoveraPalette({
   );
 
   const panelRef = useRef<HTMLDivElement>(null);
+  const canvasInputRef = useRef<HTMLInputElement>(null);
   const activeTurnRef = useRef<HTMLDivElement>(null);
   const actionCardRef = useRef<HTMLDivElement>(null);
   const scrollStageRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const followUpInputRef = useRef<HTMLInputElement>(null);
   const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    // When the canvas opens, move focus into the canvas search input
+    canvasInputRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -266,18 +271,14 @@ export default function AskNoveraPalette({
   };
 
   return (
-    <Portal>
-      <Box
-        ref={panelRef}
-        tabIndex={-1}
-        role="dialog"
-        aria-label="Ask Novera Results"
-        sx={{
-          position: "fixed",
-          inset: 0,
-          width: "100vw",
-          height: "100vh",
-          zIndex: (theme) => theme.zIndex.modal + 100,
+    <Dialog
+      fullScreen
+      open
+      onClose={onClose}
+      aria-label="Ask Novera Results"
+      transitionDuration={0}
+      PaperProps={{
+        sx: {
           bgcolor: "background.default",
           backgroundColor: "var(--oxygen-palette-background-default)",
           backdropFilter: "none",
@@ -286,9 +287,9 @@ export default function AskNoveraPalette({
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          "&:focus": { outline: "none" },
-        }}
-      >
+        },
+      }}
+    >
         {/* Sticky Top Bar: Symmetric flanks with perfectly centered search bar */}
         <Box
           sx={{
@@ -406,6 +407,8 @@ export default function AskNoveraPalette({
                 }}
               />
               <InputBase
+                autoFocus
+                inputRef={canvasInputRef}
                 value={canvasQuery}
                 onChange={(e) => setCanvasQuery(e.target.value)}
                 placeholder="Search or ask Novera..."
@@ -763,8 +766,6 @@ export default function AskNoveraPalette({
             <div ref={messagesEndRef} />
           </Box>
         </Box>
-
-      </Box>
-    </Portal>
+    </Dialog>
   );
 }

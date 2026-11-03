@@ -270,13 +270,13 @@ export default function TopBar({
           </Box>
         </Header.Brand>
 
-      {/* Palette trigger. A click target rather than a real input: the palette
-          owns the query field.
+      {/* Palette trigger:
+          - When preview flag is OFF (!isNoveraEnabled): Left-aligned directly next to Brand,
+            followed by PinnedTabs which absorbs the remaining middle space.
+          - When preview flag is ON (isNoveraEnabled): Centered in the top bar with balanced
+            flex growth on both sides. */}
+      {isNoveraEnabled && <Box sx={{ flexGrow: 1, minWidth: 0 }} />}
 
-          Fixed responsive widths rather than `flex: 1`, so the flexible slot
-          belongs to PinnedTabs instead — the pinned strip is the part that
-          benefits from spare room. It also narrows once anything is pinned,
-          since the two share that row; at `xs` it collapses to an icon. */}
       {!isNoveraEnabled ? (
         <Box
           role="button"

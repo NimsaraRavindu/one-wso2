@@ -722,18 +722,32 @@ export function matchDirectory(query: string, bucket?: string | null): Directory
 
   const words = normalized.split(/[^a-z0-9_-]+/);
 
-  return DIRECTORY_CATALOG.find((entry) => {
+  for (const entry of DIRECTORY_CATALOG) {
     if (entry.title.toLowerCase() === normalized) {
-      return true;
+      return entry;
     }
-    return entry.keywords.some((kw) => {
+  }
+
+  let bestEntry: DirectoryEntry | undefined;
+  let bestScore = 0;
+
+  for (const entry of DIRECTORY_CATALOG) {
+    for (const kw of entry.keywords) {
+      let matched = false;
       if (kw === normalized) {
-        return true;
+        matched = true;
+      } else if (kw.includes(" ")) {
+        matched = normalized.includes(kw);
+      } else {
+        matched = words.includes(kw);
       }
-      if (kw.includes(" ")) {
-        return normalized.includes(kw);
+
+      if (matched && kw.length > bestScore) {
+        bestScore = kw.length;
+        bestEntry = entry;
       }
-      return words.includes(kw);
-    });
-  });
+    }
+  }
+
+  return bestEntry;
 }

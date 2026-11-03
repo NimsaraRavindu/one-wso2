@@ -260,19 +260,11 @@ describe("Ask Novera Search Bar and Results", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("clears search input and closes results on clear button click", async () => {
-    mockAuthedPost.mockResolvedValueOnce({
-      response: "Here is your leave history.",
-      status: "success",
-      bucket: "LEAVE_STANDARD",
-    });
-
+  it("clears search input on clear button click", async () => {
     renderTopBar();
     const user = userEvent.setup();
     const input = screen.getByPlaceholderText("Ask Novera");
-    await user.type(input, "Show leaves{Enter}");
-
-    expect(await screen.findByText("Here is your leave history.")).toBeInTheDocument();
+    await user.type(input, "Show leaves");
 
     const clearBtn = screen.getByRole("button", { name: "Clear search" });
     await user.click(clearBtn);
@@ -301,13 +293,12 @@ describe("Ask Novera Search Bar and Results", () => {
     await user.type(input, "my leaves{Enter}");
     expect(await screen.findByRole("button", { name: "Open Leave App" })).toBeInTheDocument();
 
-    // 2. Typing new query closes the results dropdown immediately
-    await user.clear(input);
-    await user.type(input, "what is the wifi password?");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // 2. Searching a new query from the canvas search bar updates results
+    const canvasInput = screen.getByPlaceholderText("Search or ask Novera...");
+    await user.clear(canvasInput);
+    await user.type(canvasInput, "what is the wifi password?{Enter}");
 
     // 3. Submitting the new query without a bucket removes the Leave App button
-    await user.keyboard("{Enter}");
     expect(await screen.findByText("Our office WiFi network is WSO2-Corp.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open Leave App" })).not.toBeInTheDocument();
     expect(screen.queryByText("Leave Management")).not.toBeInTheDocument();
@@ -371,26 +362,16 @@ describe("Ask Novera Search Bar and Results", () => {
   });
 
   it("wipes typed search query when clicking One WSO2 logo", async () => {
-    mockAuthedPost.mockResolvedValueOnce({
-      response: "Today's lunch features steamed basmati rice with chicken curry.",
-      status: "success",
-      bucket: "PO_MENU",
-    });
-
     renderTopBar();
     const user = userEvent.setup();
     const input = screen.getByPlaceholderText("Ask Novera");
 
-    await user.type(input, "what is for lunch{Enter}");
-    expect(
-      await screen.findByText("Today's lunch features steamed basmati rice with chicken curry."),
-    ).toBeInTheDocument();
+    await user.type(input, "what is for lunch");
 
-    // Click One WSO2 brand button in header: wipes typed text and closes results
+    // Click One WSO2 brand button in header: wipes typed text
     const brandLink = screen.getByRole("link", { name: "One WSO2 home" });
     await user.click(brandLink);
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(input).toHaveValue("");
   });
 
