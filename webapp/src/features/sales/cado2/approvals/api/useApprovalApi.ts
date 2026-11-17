@@ -30,6 +30,7 @@ import type {
   CatalogProduct,
   MatrixChange,
   MatrixSaveResult,
+  Review,
 } from "./approvalTypes";
 
 // Approval data changes as soon as anyone decides: always re-fetched on open
@@ -198,5 +199,17 @@ export function useSaveApprovalMatrix() {
       void queryClient.invalidateQueries({ queryKey: key("approvals") });
       void queryClient.invalidateQueries({ queryKey: key("quotes") });
     },
+  });
+}
+
+/** The version through the caller's lenses (D129); idle for a draft. */
+export function useReview(quoteId: number | null, version: number | null, enabled: boolean) {
+  const { getToken, ready, key } = useCado2Basis();
+  return useQuery<Review, Error>({
+    queryKey: key("quotes", "review", quoteId, version),
+    queryFn: async () => authedGet<Review>(cado2ServiceUrls.review(quoteId as number, version as number), await getToken()),
+    enabled: ready && enabled && quoteId !== null && version !== null,
+    ...live,
+    retry: httpRetry,
   });
 }

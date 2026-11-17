@@ -24,7 +24,7 @@
  * branching the build or holding work out of `main`.
  *
  * ```js
- * ONE_WSO2_PREVIEW_FEATURES: { cado2: true },
+ * ONE_WSO2_PREVIEW_FEATURES: { quickquote: true },
  * ```
  *
  * ## Absent means off
@@ -55,19 +55,36 @@
  */
 export type PreviewFeature =
   /**
-   * Sales → CadO2, the whole quote tool: its rail group (My Quotes, My
-   * Approvals, Admin), every route under `/sales/cado2`, and its backend
+   * Sales → QuickQuote (code name CadO2), the whole quote tool: its rail
+   * group (My Quotes, My Approvals, Admin), every route under
+   * `/sales/quickquote`, and its backend
    * calls. Held back as a whole until every screen is in place. CadO2's own
    * `/me` roles still decide who sees which item once this is on. See
    * docs/ported-apps/cado2.md.
    */
-  | "cado2"
+  | "quickquote"
   /**
    * Legal → NDA, the PDF generator — its rail entry and the `/legal/nda`
    * route. Held back until it is ready for production. Due Diligence, the
    * rest of the Legal perspective, is unaffected.
    */
   | "nda"
+  /**
+   * Marketing Ops → Marketing Calendar, the month view of events, content, social
+   * posts and emails planned in GitHub: its rail group, the
+   * `/marketing-ops/marketing-calendar` route, and its backend calls. Held back
+   * while the business owners settle which GitHub items it shows
+   * (digiops-marketing#1596).
+   */
+  | "marketingCalendar"
+  /**
+   * Marketing Ops → Events → Lead Import, which converts a raw event lead file
+   * into the filled List Import Template: its rail entry and the
+   * `/marketing-ops/events/lead-import` route. Held back until the MOP
+   * lead-import backend is live in production. My Submissions and Review
+   * Queue, the rest of Events, are unaffected.
+   */
+  | "eventsLeadImport"
   /**
    * Amplify, the whole app: its launcher tile, its rail group (Celebrate,
    * New Post, Current Posts) and every route under `/amplify`. Held back until
@@ -81,6 +98,20 @@ export type PreviewFeature =
    * is still being built out; this flag hides the tab until it is ready.
    */
   | "campaignTrackerPacing"
+  /**
+   * Swag Store, where employees spend O2C coins on WSO2 swag: its top-bar
+   * button, its launcher tile and rail, every route under `/store`, and its
+   * backend calls. Held back until the store's first release is ready for
+   * the pilot.
+   */
+  | "swagStore"
+  /**
+   * Finance → Procurement, where an employee raises a purchase request and
+   * follows it: its rail group, every route under `/finance/procurement`, and
+   * its backend calls. Held back while the app is being built: submitting a
+   * request is not connected to the backend yet.
+   */
+  | "procurement"
   /**
    * TopBar → Ask Novera, the conversational AI assistant in the top bar. Held
    * back while it is built. With the flag on and

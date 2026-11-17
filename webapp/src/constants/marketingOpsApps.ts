@@ -52,9 +52,11 @@
 // overview page alike. It is Sarindu's, chosen by how much the operations are
 // used rather than by name or by the order they were ported in: Email
 // Workbench, Ad Campaigns, Events, CRM Upload, then Utilities, with Marketing
-// Admin last because it configures the rest. Don't sort it.
+// Admin last because it configures the rest. The Marketing Calendar goes ahead
+// of them all. Don't sort it.
 
 import {
+  CalendarDaysIcon,
   CalendarRangeIcon,
   ChartNoAxesCombinedIcon,
   MegaphoneIcon,
@@ -65,8 +67,33 @@ import {
   WrenchIcon,
 } from "@wso2/oxygen-ui-icons-react";
 import type { MenuApp } from "@constants/appMenu";
+import { isPreviewEnabled } from "@config/previewFeatures";
+
+// Marketing Calendar. Kept outside the array so its eyebrow can be built while the
+// `marketingCalendar` preview flag keeps it out of the rail — eyebrowFor below only
+// finds apps that are in MARKETING_OPS_APPS.
+const MARKETING_CALENDAR_APP: MenuApp = {
+  key: "marketing-calendar",
+  name: "Marketing Calendar",
+  icon: CalendarDaysIcon,
+  purpose:
+    "A month view of the events, content, social posts and emails the marketing team plans in GitHub.",
+  items: [
+    // Read-only, live from GitHub through the Engineering Entity Service.
+    {
+      id: "mops-marketing-calendar",
+      label: "Calendar",
+      desc: "Everything planned for the month, filterable by events, content, social and email.",
+      requires: ["admin"],
+      path: "/marketing-ops/marketing-calendar",
+    },
+  ],
+};
 
 export const MARKETING_OPS_APPS: readonly MenuApp[] = [
+  // First, above ISAC too in the rail (see perspectives.ts). Hidden until the
+  // `marketingCalendar` preview flag is on.
+  ...(isPreviewEnabled("marketingCalendar") ? [MARKETING_CALENDAR_APP] : []),
   {
     key: "email-workbench",
     name: "Email Workbench",
@@ -147,6 +174,17 @@ export const MARKETING_OPS_APPS: readonly MenuApp[] = [
         requires: ["admin"],
         path: "/marketing-ops/ad-campaigns/campaign-tracker",
       },
+      // Backend-integrated benchmark grading — same `adcampaigns` gate. The
+      // backend provides raw per-campaign lines (objective, format, region,
+      // LinkedIn form/messaging metrics); grading is computed client-side from
+      // those lines. See benchmarkGradingLogic.ts for the index formula.
+      {
+        id: "mops-benchmark-grading",
+        label: "Benchmark Grading",
+        desc: "Every campaign scored on conversion and cost against WSO2's internal benchmarks, with grade distribution by owner.",
+        requires: ["admin"],
+        path: "/marketing-ops/ad-campaigns/benchmark-grading",
+      },
     ],
   },
   {
@@ -160,6 +198,21 @@ export const MARKETING_OPS_APPS: readonly MenuApp[] = [
       // submitting your own lists, `events-review` covers reviewing others'.
       // Neither implies the other — a reviewer holds both groups because the
       // operation's router is gated on `events`. See access_map.yaml.
+      // First, because it is the first step: a raw lead file is mapped onto the
+      // template columns here, and the RMM uploads the result to My Submissions. Same
+      // `events` capability as My Submissions. Hidden until the
+      // `eventsLeadImport` preview flag is on.
+      ...(isPreviewEnabled("eventsLeadImport")
+        ? [
+            {
+              id: "mops-events-lead-import",
+              label: "Lead Import",
+              desc: "Map a raw event lead file — any layout, any language — onto the List Import Template columns.",
+              requires: ["admin" as const],
+              path: "/marketing-ops/events/lead-import",
+            },
+          ]
+        : []),
       {
         id: "mops-events-mine",
         label: "My Submissions",
@@ -387,6 +440,7 @@ export const MARKETING_OPS_EYEBROW = {
   adCampaigns: eyebrowFor("ad-campaigns"),
   events: eyebrowFor("events"),
   eventPlatform: eyebrowFor("event-platform"),
+  marketingCalendar: { icon: MARKETING_CALENDAR_APP.icon, label: MARKETING_CALENDAR_APP.name },
   crmUpload: eyebrowFor("crm-upload"),
   designStudio: eyebrowFor("design-studio"),
   utilities: eyebrowFor("utilities"),

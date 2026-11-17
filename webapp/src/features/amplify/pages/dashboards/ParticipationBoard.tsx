@@ -33,7 +33,7 @@ import {
   type ExportPeriod,
 } from "../../util/dashboardFormat";
 
-/** Employees → connected → reposted → active: where people drop out. */
+/** Employees, connected, reposted, active: how many people are at each stage (separate counts, not a strict funnel). */
 export function Funnel({ data }: { data: DashboardParticipation }) {
   const f = data.funnel;
   const top = f.employees && f.employees > 0 ? f.employees : Math.max(1, f.connected);
@@ -46,17 +46,10 @@ export function Funnel({ data }: { data: DashboardParticipation }) {
     value: f.connected,
     detail: f.employees ? `${num(f.connected)} · ${percentOf(f.connected, f.employees)}` : num(f.connected),
   });
-  steps.push({
-    name: "Reposted at least once",
-    value: f.reposted,
-    detail: `${num(f.reposted)} · ${percentOf(f.reposted, f.connected)} of connected`,
-  });
-  steps.push({
-    name: "Active in last 30 days",
-    value: f.active30Days,
-    detail: `${num(f.active30Days)} · ${percentOf(f.active30Days, f.connected)} of connected`,
-    color: "primary.main",
-  });
+  // Counts only: reposters and active people include those who reposted and then disconnected, so they are not a
+  // subset of "connected", and a share of connected could pass 100%.
+  steps.push({ name: "Reposted at least once", value: f.reposted, detail: num(f.reposted) });
+  steps.push({ name: "Active in last 30 days", value: f.active30Days, detail: num(f.active30Days), color: "primary.main" });
   return (
     <Block title="Employee journey">
       <Box component="ol" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1.5 }}>
@@ -71,7 +64,7 @@ export function Funnel({ data }: { data: DashboardParticipation }) {
       <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
         {num(f.expired)} connections have expired.
         {f.employees != null && f.employees > f.connected
-          ? ` ${num(f.employees - f.connected)} employees have never connected.`
+          ? ` ${num(f.employees - f.connected)} employees are not connected.`
           : ""}
       </Typography>
     </Block>
@@ -79,17 +72,16 @@ export function Funnel({ data }: { data: DashboardParticipation }) {
 }
 
 interface Column {
-  key: GroupSort | "bu";
+  key: GroupSort;
   label: string;
   numeric: boolean;
   align?: "right";
   sortable: boolean;
 }
 
-const columnsFor = (nameLabel: string, withBu: boolean): Column[] => [
+const columnsFor = (nameLabel: string): Column[] => [
   { key: "rank", label: "#", numeric: true, sortable: true },
   { key: "name", label: nameLabel, numeric: false, sortable: true },
-  ...(withBu ? [{ key: "bu", label: "BU", numeric: false, sortable: false } as Column] : []),
   { key: "points", label: "Points", numeric: true, align: "right", sortable: true },
   { key: "participants", label: "Participants", numeric: true, align: "right", sortable: true },
   { key: "headcount", label: "Headcount", numeric: true, align: "right", sortable: true },
@@ -101,7 +93,6 @@ function GroupTable({
   title,
   noun,
   nameLabel,
-  withBu,
   action,
   board,
   sort,
@@ -112,14 +103,13 @@ function GroupTable({
   /** Plural, for the empty and footnote text. */
   noun: string;
   nameLabel: string;
-  withBu: boolean;
   action?: ReactNode;
   board: GroupBoard | undefined;
   sort: GroupSort;
   dir: SortDir;
   onSort: (col: GroupSort) => void;
 }) {
-  const COLUMNS = columnsFor(nameLabel, withBu);
+  const COLUMNS = columnsFor(nameLabel);
   return (
     <Block title={title} action={action}>
       {!board || board.entries.length === 0 ? (
@@ -160,7 +150,6 @@ function GroupTable({
                 <TableRow key={e.key}>
                   <TableCell>{e.rank}</TableCell>
                   <TableCell>{e.name}</TableCell>
-                  {withBu && <TableCell>{e.businessUnit ?? "-"}</TableCell>}
                   <TableCell align="right">{num(e.points)}</TableCell>
                   <TableCell align="right">{num(e.participants)}</TableCell>
                   <TableCell align="right">{num(e.headcount)}</TableCell>
@@ -191,53 +180,19 @@ function GroupTable({
   );
 }
 
-/** The teams of one business unit, ranked. */
+/** Every team, ranked. */
 export function TeamTable({
   board,
-  bus,
-  bu,
-  onBu,
   sort,
   dir,
   onSort,
 }: {
   board: GroupBoard | undefined;
-  /** Business units in rank order (best first). */
-  bus: string[];
-  /** The one selected BU. */
-  bu: string | undefined;
-  onBu: (bu: string) => void;
   sort: GroupSort;
   dir: SortDir;
   onSort: (col: GroupSort) => void;
 }) {
-  return (
-    <GroupTable
-      title="Team leaderboard"
-      noun="teams"
-      nameLabel="Team"
-      withBu
-      board={board}
-      sort={sort}
-      dir={dir}
-      onSort={onSort}
-      action={
-        <Box role="group" aria-label="Business unit" sx={{ display: "flex", gap: 0.75, flexWrap: "wrap" }}>
-          {bus.map((b) => (
-            <Chip
-              key={b}
-              size="small"
-              label={b}
-              color={bu === b ? "primary" : "default"}
-              variant={bu === b ? "filled" : "outlined"}
-              onClick={() => onBu(b)}
-              aria-pressed={bu === b}
-            />
-          ))}
-        </Box>
-      }
-    />
-  );
+  return <GroupTable title="Team leaderboard" noun="teams" nameLabel="Team" board={board} sort={sort} dir={dir} onSort={onSort} />;
 }
 
 /** Every house, ranked. */
@@ -252,7 +207,7 @@ export function HouseTable({
   dir: SortDir;
   onSort: (col: GroupSort) => void;
 }) {
-  return <GroupTable title="House leaderboard" noun="houses" nameLabel="House" withBu={false} board={board} sort={sort} dir={dir} onSort={onSort} />;
+  return <GroupTable title="House leaderboard" noun="houses" nameLabel="House" board={board} sort={sort} dir={dir} onSort={onSort} />;
 }
 
 const EXPORT_PERIODS: { key: ExportPeriod; label: string }[] = [
@@ -357,19 +312,14 @@ export function ExportPanel({ onExport, now }: { onExport: (from: string, to: st
 export default function ParticipationPage() {
   const exportRows = useDashboardExport();
   const funnel = useDashboardParticipation();
-  const [picked, setPicked] = useState<string | undefined>(undefined);
   const [order, setOrder] = useState<{ sort: GroupSort; dir: SortDir }>({ sort: "rank", dir: "asc" });
-  const bus = useGroupBoard("BU");
-  // Best-ranked BU first; the first one is selected until the reader picks another.
-  const buNames = (bus.data?.entries ?? []).map((e) => e.name);
-  const bu = picked && buNames.includes(picked) ? picked : buNames[0];
-  const teams = useGroupBoard("TEAM", bu, order.sort, order.dir, bu !== undefined);
+  const teams = useGroupBoard("TEAM", undefined, order.sort, order.dir);
   const [houseOrder, setHouseOrder] = useState<{ sort: GroupSort; dir: SortDir }>({ sort: "rank", dir: "asc" });
   const houses = useGroupBoard("HOUSE", undefined, houseOrder.sort, houseOrder.dir);
   return (
     <AmplifyShell
       title="Participation"
-      subtitle="Where employees drop out between hearing of Amplify and reposting regularly, and which teams lead."
+      subtitle="How many employees are at each stage of Amplify, from connecting LinkedIn to reposting regularly, and which teams lead."
     >
       <BoardState queries={[funnel]}>
         {funnel.data && (
@@ -378,12 +328,9 @@ export default function ParticipationPage() {
               {updatedStamp(funnel.data.asOf)}
             </Typography>
             <Funnel data={funnel.data} />
-            <BoardState queries={bus.data && buNames.length === 0 ? [bus] : [bus, teams]}>
+            <BoardState queries={[teams]}>
               <TeamTable
                 board={teams.data}
-                bus={buNames}
-                bu={bu}
-                onBu={setPicked}
                 sort={order.sort}
                 dir={order.dir}
                 onSort={(col) => setOrder((cur) => nextSort(cur, col))}

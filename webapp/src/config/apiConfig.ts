@@ -437,9 +437,14 @@ export const leaveServiceUrls = {
   appConfigs: `${leaveBackendUrl}/app-configs`,
   leaves: `${leaveBackendUrl}/leaves`,
   leave: (id: number) => `${leaveBackendUrl}/leaves/${id}`,
-  // action = "approve" | "reject" (sabbatical only)
+  // action = "approve" | "reject" (sabbatical and Other Authorized)
   leaveAction: (id: number, action: "approve" | "reject") =>
     `${leaveBackendUrl}/leaves/${id}/${action}`,
+  // France sick leave: multipart POST that carries the sick note.
+  sickLeave: `${leaveBackendUrl}/leaves/sick-leave`,
+  sickNote: (id: number) => `${leaveBackendUrl}/leaves/${id}/sick-note`,
+  sickNotes: (startDate: string, endDate: string) =>
+    `${leaveBackendUrl}/sick-notes?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`,
   employees: `${leaveBackendUrl}/employees`,
   // `years` maps to the repeated ?years= query the leave app sends. Omitting
   // it lets the backend pick its own period, which is what the congés-payés
@@ -537,14 +542,15 @@ export const ccServiceUrls = {
   transactionSummary: `${ccBackendUrl}/transactions/new-transaction-summary`,
   submittedByCategory: `${ccBackendUrl}/transactions/submitted-transaction-summary`,
   cardHolderCompliance: `${ccBackendUrl}/transactions/card-holder-compliance-summary`,
-  // Admin view's "Group by: Reporting Manager" — the same backlog rolled up
-  // under each report's manager. Finance only, enforced server-side.
-  managerCompliance: `${ccBackendUrl}/transactions/manager-compliance-summary`,
-  // POST — emails one reporting manager their team's unsubmitted backlog, copying
-  // the caller. Takes only the manager and the date range: the backend reads the
-  // figures itself at send time, so a reminder never carries what this page last
-  // fetched. Finance only, enforced server-side.
-  managerReminder: `${ccBackendUrl}/transactions/manager-reminder`,
+  // Admin view's "Group by: Card Lead" — the same backlog rolled up under the lead
+  // each card is mapped to in the credit card master data. Finance only, enforced
+  // server-side.
+  cardLeadCompliance: `${ccBackendUrl}/transactions/card-lead-compliance-summary`,
+  // POST — emails one card lead the unsubmitted backlog of the card holders they
+  // approve for, copying the caller. Takes only the lead and the date range: the
+  // backend reads the figures itself at send time, so a reminder never carries what
+  // this page last fetched. Finance only, enforced server-side.
+  cardLeadReminder: `${ccBackendUrl}/transactions/card-lead-reminder`,
   // Lead view: every lead's approval backlog, and one lead's team within it.
   leadApprovalSummary: `${ccBackendUrl}/transactions/lead-approval-summary`,
   leadTeamCardHolders: `${ccBackendUrl}/transactions/lead-team-card-holder-summary`,
@@ -557,6 +563,9 @@ export const ccServiceUrls = {
   // funding sources it is charged against — userMenus.ts:244-252.
   jobNumberDetails: (jobNumber: string) =>
     `${ccBackendUrl}/travels/${encodeURIComponent(jobNumber)}`,
+  // Autofill rules: GET the caller's / POST one, and GET / PATCH / DELETE one.
+  taggingRules: `${ccBackendUrl}/tagging-rules`,
+  taggingRule: (id: number) => `${ccBackendUrl}/tagging-rules/${id}`,
   // GET base64 attachment / DELETE it.
   attachment: (id: number, attachmentType: string) =>
     `${ccBackendUrl}/transactions/${id}/attachments?attachmentType=${encodeURIComponent(attachmentType)}`,
@@ -711,9 +720,10 @@ export const umtServiceUrls = {
     `${umtBackendUrl}/update/${encodeURIComponent(id)}/dependency`,
   updatePullRequestAnalysis: (id: string | number) =>
     `${umtBackendUrl}/update/${encodeURIComponent(id)}/pullRequestAnalysis`,
-  // GET — polled while PR analysis is QUEUED/PROCESSING.
-  updatePullRequestAnalysisStatus: (id: string | number) =>
-    `${umtBackendUrl}/update/${encodeURIComponent(id)}/pullRequestAnalysisStatus`,
+  // POST — starts a PR analysis. With `promote`, the backend then moves the
+  // update to PRAnalyzed and runs its product analysis.
+  startPullRequestAnalysis: (id: string | number) =>
+    `${umtBackendUrl}/update/${encodeURIComponent(id)}/pullRequestAnalysis?promote=true`,
   // POST (multipart) — uploads one manually-added file for PR analysis.
   updatePullRequestAnalysisFile: (id: string | number) =>
     `${umtBackendUrl}/update/${encodeURIComponent(id)}/pullRequestAnalysis/file`,
@@ -911,6 +921,15 @@ export const marketingOpsServiceUrls = {
   adAnalyticsLinkedInRoiRun: `${marketingOpsBackendUrl}/api/ad-campaigns/analytics/linkedin-roi/run`,
   adAnalyticsDashboardRun: `${marketingOpsBackendUrl}/api/ad-campaigns/analytics/dashboard/run`,
 
+  // ---- ad campaigns → benchmark grading --------------------------------------
+  //
+  // POST /api/ad-campaigns/benchmark-grading/run — returns raw per-campaign lines
+  // (spend, impressions, clicks, LinkedIn objective/format/form metrics, etc.) for
+  // the requested date window. Grading is computed entirely client-side from the
+  // returned lines; nothing is stored. The body is { window: DateWindow }. The
+  // endpoint is a POST-as-read for the same reason as the analytics siblings above.
+  benchmarkGradingRun: `${marketingOpsBackendUrl}/api/ad-campaigns/benchmark-grading/run`,
+
   // ---- ad campaigns → campaign tracker ---------------------------------------
   //
   // The weekly operating rhythm for every live campaign: Register/Budget Pacing
@@ -1080,6 +1099,11 @@ export const marketingOpsServiceUrls = {
     `${marketingOpsBackendUrl}/api/events/review/submissions/${encodeURIComponent(id)}/export/${encodeURIComponent(tab)}`,
   eventsReviewExportAll: (id: string) =>
     `${marketingOpsBackendUrl}/api/events/review/submissions/${encodeURIComponent(id)}/export`,
+  // ---- events: lead import --------------------------------------------------
+  // POST — the column-mapping suggestion for one raw lead file: headings and a few sample
+  // values in, one mapping entry per template column out. Stateless; the file itself is
+  // read and converted in the browser.
+  eventsLeadImportSuggest: `${marketingOpsBackendUrl}/api/events/lead-import/suggest`,
 
   // ---- crm-upload ----------------------------------------------------------------
   //
@@ -1111,6 +1135,12 @@ export const marketingOpsServiceUrls = {
     `${marketingOpsBackendUrl}/api/crm-upload/duplicates/${encodeURIComponent(id)}/resolve`,
   crmUploadTrigger: (kind: "leads" | "accounts") =>
     `${marketingOpsBackendUrl}/api/crm-upload/triggers/${kind}`,
+
+  // GitHub issues planned as events, content, social posts and emails, read live
+  // through the Engineering Entity Service on every call — nothing is cached server
+  // side. `from` and `to` are civil dates (YYYY-MM-DD), both included.
+  marketingCalendarItems: (from: string, to: string) =>
+    `${marketingOpsBackendUrl}/api/marketing-calendar/items?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
 
   // The remaining operation root — /api/audit — gets its builders added by the phase
   // that ports it, so this object never lists a URL nothing calls.
@@ -1430,6 +1460,26 @@ export function salesforceRecordUrl(object: "Lead" | "Account", id: string): str
   return `${salesforceBaseUrl}/lightning/r/${object}/${encodeURIComponent(id)}/view`;
 }
 
+// Image used in the generated email signature. Optional; falls back to the default below.
+export const emailSignatureLogoUrl: string =
+  window.config?.ONE_WSO2_EMAIL_SIGNATURE_LOGO_URL?.trim() ||
+  "https://wso2.cachefly.net/wso2/sites/all/image_resources/logos/wso2-orange-logo.png";
+
+// Optional path or URL of an HTML file that replaces the built-in email signature
+// layout (for example a file mounted next to config.js, "/email-signature.html").
+// Empty means the built-in layout is used.
+export const emailSignatureTemplateUrl: string = window.config?.ONE_WSO2_EMAIL_SIGNATURE_TEMPLATE_URL?.trim() ?? "";
+
+// For one person whose signature address isn't their work email's username:
+// their work email, and the username their signature's email should use
+// (e.g. jdoe2@wso2.com and jdoe). Read from .env at build time, unlike the keys
+// above, so the values stay out of this public repo. Vite copies them into the
+// bundle, so they are still readable in the browser. Both empty means no override.
+export const emailSignatureOverrideWorkEmail: string =
+  import.meta.env.ONE_WSO2_EMAIL_SIGNATURE_OVERRIDE_WORK_EMAIL?.trim() ?? "";
+export const emailSignatureOverrideEmailUser: string =
+  import.meta.env.ONE_WSO2_EMAIL_SIGNATURE_OVERRIDE_EMAIL_USER?.trim() ?? "";
+
 // ISAC — a separate marketing application, not part of this webapp and not a
 // Marketing Ops operation. It appears at the top of the Marketing Ops rail as an
 // outbound link because that is where the people who use it look for it, not
@@ -1520,6 +1570,12 @@ export const infraServiceUrls = {
   // GET, POST /repository-requests/{id}/comments — comment thread on a creation request.
   repositoryRequestComments: (id: number) =>
     `${infraBackendUrl}/repository-requests/${id}/comments`,
+  // PATCH /repository-requests/{id}/approve — approver/admin decision.
+  repositoryRequestApprove: (id: number) =>
+    `${infraBackendUrl}/repository-requests/${id}/approve`,
+  // PATCH /repository-requests/{id}/reject — body: { commentText }.
+  repositoryRequestReject: (id: number) =>
+    `${infraBackendUrl}/repository-requests/${id}/reject`,
   // POST /github/verify-and-persist-user — verify a GitHub user and persist their information.
   githubVerifyAndPersistUser: `${infraBackendUrl}/github/verify-and-persist-user`,
   // POST /set-default-repository-access — set the default repository access for the caller.
@@ -1773,24 +1829,6 @@ export function isAmplifyBackendConfigured(): boolean {
   return Boolean(amplifyBackendUrl);
 }
 
-/**
- * Origins a post link (and the LinkedIn sign-in redirect) may use, lowercase. LinkedIn only unless
- * `ONE_WSO2_AMPLIFY_POST_LINK_ORIGINS` adds more (the mock LinkedIn, for dev and demos). amplify-api applies
- * the same rule (`campaignLinkOrigins`); this copy keeps the UI from sending or showing anything else.
- */
-export const amplifyPostLinkOrigins: readonly string[] = (() => {
-  const configured = (window.config?.ONE_WSO2_AMPLIFY_POST_LINK_ORIGINS ?? [])
-    .map((o) => o.trim().toLowerCase())
-    .filter(Boolean);
-  return configured.length > 0 ? configured : ["https://www.linkedin.com", "https://linkedin.com"];
-})();
-
-/** Link target for "WSO2 Employee Privacy Notice" in the Link Me consent pop-up. Empty shows plain text. */
-export const amplifyPrivacyNoticeUrl: string = (window.config?.ONE_WSO2_AMPLIFY_PRIVACY_NOTICE_URL ?? "").trim();
-
-/** WSO2's LinkedIn organization URN, the owner New Post sends. Empty when unset. */
-export const amplifyLinkedInOrgUrn: string = (window.config?.ONE_WSO2_AMPLIFY_LINKEDIN_ORG_URN ?? "").trim();
-
 export const amplifyServiceUrls = {
   // The caller, their amplify_* roles and LinkedIn connection status.
   me: `${amplifyBackendUrl}/me`,
@@ -1815,6 +1853,12 @@ export const amplifyServiceUrls = {
   dashboardParticipation: `${amplifyBackendUrl}/dashboards/participation`,
   dashboardExport: `${amplifyBackendUrl}/dashboards/export`,
   dashboardPeople: `${amplifyBackendUrl}/dashboards/people`,
+  // POST re-queues a FAILED Novera announcement by campaign id (CAN_ADMIN only, 409 if it is not FAILED).
+  adminAnnouncementRetry: (campaignId: string) =>
+    `${amplifyBackendUrl}/admin/announcements/${encodeURIComponent(campaignId)}/retry`,
+  // POST queues the Novera announcement for a post that has none (CAN_ADMIN only, 409 once one exists).
+  adminAnnouncementSend: (campaignId: string) =>
+    `${amplifyBackendUrl}/admin/announcements/${encodeURIComponent(campaignId)}/send`,
   dashboardGlance: `${amplifyBackendUrl}/dashboards/glance`,
   dashboardScorecard: `${amplifyBackendUrl}/dashboards/scorecard`,
   connectStart: `${amplifyBackendUrl}/connections/linkedin/start`,
@@ -2016,6 +2060,36 @@ export function isCado2BackendConfigured(): boolean {
 
 const encodeSegment = (value: string | number): string => encodeURIComponent(String(value));
 
+// Procurement — Finance → Procurement, purchase requests through to Procurement
+// assignment. Its own backend, version segment included. Unset means "not
+// connected": its pages say so and make no requests. Gated as a whole by the
+// `procurement` preview flag as well (previewFeatures.ts).
+export const procurementBackendUrl: string = stripTrailingSlashes(
+  window.config?.ONE_WSO2_PROCUREMENT_BACKEND_URL ?? "",
+);
+
+export function isProcurementBackendConfigured(): boolean {
+  return Boolean(procurementBackendUrl);
+}
+
+export const procurementServiceUrls = {
+  me: `${procurementBackendUrl}/me`,
+  meTeamLead: `${procurementBackendUrl}/me/team-lead`,
+  referenceData: (type: string): string => `${procurementBackendUrl}/reference-data?type=${encodeSegment(type)}`,
+  budgetApprovers: (businessUnit: string, region: string): string => {
+    const q = new URLSearchParams();
+    if (businessUnit) q.set("businessUnit", businessUnit);
+    if (region) q.set("region", region);
+    return `${procurementBackendUrl}/budget-approvers?${q.toString()}`;
+  },
+  engagementCodes: (businessUnit: string): string =>
+    `${procurementBackendUrl}/engagement-codes?businessUnit=${encodeSegment(businessUnit)}`,
+  directoryEmployees: (query: string, leadsOnly: boolean): string =>
+    `${procurementBackendUrl}/directory/employees?query=${encodeSegment(query)}${leadsOnly ? "&leadsOnly=true" : ""}`,
+  requests: (limit: number): string => `${procurementBackendUrl}/requests?limit=${encodeSegment(limit)}`,
+  request: (requestId: string): string => `${procurementBackendUrl}/requests/${encodeSegment(requestId)}`,
+};
+
 export const cado2ServiceUrls = {
   // The caller's CadO2 roles (SALES, ADMIN) and approval roles. Decides the rail
   // and every CadO2 route; the backend re-checks each call on its own.
@@ -2023,13 +2097,21 @@ export const cado2ServiceUrls = {
   legalEntities: (activeOnly = false): string =>
     `${cado2BackendUrl}/legal-entities${activeOnly ? "?active=true" : ""}`,
   legalEntity: (id: number): string => `${cado2BackendUrl}/legal-entities/${encodeSegment(id)}`,
+  // PUT: the entities' order, every ID once (D161).
+  legalEntityOrder: `${cado2BackendUrl}/admin/legal-entities/order`,
   // Salesforce lookups, read live through the backend.
   accounts: (nameContains: string): string =>
     `${cado2BackendUrl}/accounts?nameContains=${encodeSegment(nameContains)}&limit=20`,
   accountOpportunities: (accountId: string, status: "open" | "won" = "open"): string =>
     `${cado2BackendUrl}/accounts/${encodeSegment(accountId)}/opportunities?status=${encodeSegment(status)}`,
-  accountContacts: (accountId: string): string =>
-    `${cado2BackendUrl}/accounts/${encodeSegment(accountId)}/contacts`,
+  // The contacts on an opportunity (D124): the billing and security contacts
+  // are chosen from these only.
+  opportunityContacts: (opportunityId: string): string =>
+    `${cado2BackendUrl}/opportunities/${encodeSegment(opportunityId)}/contacts`,
+  // The opportunity's product lines as they are in Salesforce now (D147); with
+  // the quote's price book and currency, checked for loading (D150).
+  opportunityLines: (opportunityId: string): string =>
+    `${cado2BackendUrl}/opportunities/${encodeSegment(opportunityId)}/products`,
   // One page of a price book's products in a currency. Paged server-side by
   // limit/offset (Salesforce stops at offset 2000).
   products: (
@@ -2051,12 +2133,22 @@ export const cado2ServiceUrls = {
   quoteSettings: `${cado2BackendUrl}/quote-settings`,
   pricingPreview: `${cado2BackendUrl}/pricing/preview`,
   quotes: `${cado2BackendUrl}/quotes`,
-  // My Quotes: the caller's own quotes.
-  // scope "mine" (the default) or "all" (every AM's quotes, D70).
-  quoteList: (status: string, scope = "mine"): string => {
-    const q = new URLSearchParams({ limit: "200" });
-    if (status) q.set("status", status);
-    if (scope !== "mine") q.set("scope", scope);
+  // The Quotes page: scope "mine" (the default) or "all" (every AM's quotes,
+  // D70), one page at a time, searched and sorted by the backend (D148);
+  // byAccount pages accounts, for the tree.
+  quoteList: (p: {
+    scope: string;
+    q: string;
+    sort: string;
+    order: string;
+    byAccount: boolean;
+    limit: number;
+    offset: number;
+  }): string => {
+    const q = new URLSearchParams({ limit: String(p.limit), offset: String(p.offset), sort: p.sort, order: p.order });
+    if (p.scope !== "mine") q.set("scope", p.scope);
+    if (p.byAccount) q.set("group", "account");
+    if (p.q) q.set("q", p.q);
     return `${cado2BackendUrl}/quotes?${q.toString()}`;
   },
   quote: (quoteId: number): string => `${cado2BackendUrl}/quotes/${encodeSegment(quoteId)}`,
@@ -2070,11 +2162,15 @@ export const cado2ServiceUrls = {
   // The quotes on an opportunity, with which is primary (D68).
   opportunityQuotes: (opportunityId: string): string =>
     `${cado2BackendUrl}/opportunities/${encodeSegment(opportunityId)}/quotes`,
+  // Whether the opportunity is still open in Salesforce (D164).
+  opportunityState: (opportunityId: string): string =>
+    `${cado2BackendUrl}/opportunities/${encodeSegment(opportunityId)}/state`,
   // What AMs may do with quotes they don't own (D69; Admin).
   adminQuoteAccess: `${cado2BackendUrl}/admin/quote-access`,
   adminSalesforceSync: `${cado2BackendUrl}/admin/salesforce-sync`,
   // Whether approval emails go out (D103; Admin).
   adminEmailNotifications: `${cado2BackendUrl}/admin/email-notifications`,
+  adminQuoteVersions: `${cado2BackendUrl}/admin/quote-versions`,
   // Insights (D106): Deal Desk and above, Admins.
   insightsApprovalOperations: `${cado2BackendUrl}/insights/approval-operations`,
   insightsQuotes: `${cado2BackendUrl}/insights/quotes`,
@@ -2087,6 +2183,14 @@ export const cado2ServiceUrls = {
     `${cado2BackendUrl}/quotes/${encodeSegment(quoteId)}/versions/${encodeSegment(version)}/submit`,
   quoteSync: (quoteId: number, version: number): string =>
     `${cado2BackendUrl}/quotes/${encodeSegment(quoteId)}/versions/${encodeSegment(version)}/sync`,
+  // What a sync would change on the opportunity (D138).
+  quoteSyncPreview: (quoteId: number, version: number): string =>
+    `${cado2BackendUrl}/quotes/${encodeSegment(quoteId)}/versions/${encodeSegment(version)}/sync/preview`,
+  // How Salesforce differs from a draft, and taking it (D173).
+  quoteSalesforceChanges: (quoteId: number, version: number): string =>
+    `${cado2BackendUrl}/quotes/${encodeSegment(quoteId)}/versions/${encodeSegment(version)}/salesforce-changes`,
+  quoteRefreshFromSalesforce: (quoteId: number, version: number): string =>
+    `${cado2BackendUrl}/quotes/${encodeSegment(quoteId)}/versions/${encodeSegment(version)}/refresh-from-salesforce`,
   quoteRecall: (quoteId: number, version: number): string =>
     `${cado2BackendUrl}/quotes/${encodeSegment(quoteId)}/versions/${encodeSegment(version)}/recall`,
   // A version's order form documents: GET lists them, POST issues the order form.
@@ -2119,23 +2223,28 @@ export const cado2ServiceUrls = {
   approvalMatrix: `${cado2BackendUrl}/admin/approval-matrix`,
   approvalMatrixChanges: `${cado2BackendUrl}/admin/approval-matrix/changes`,
   approvalMatrixProducts: `${cado2BackendUrl}/admin/approval-matrix/products`,
-  adminCurrencies: `${cado2BackendUrl}/admin/currencies`,
-  adminCurrency: (code: string): string => `${cado2BackendUrl}/admin/currencies/${encodeSegment(code)}`,
   adminApprovalSlas: `${cado2BackendUrl}/admin/approval-slas`,
   adminApprovalSlaChanges: `${cado2BackendUrl}/admin/approval-slas/changes`,
-  productCategories: `${cado2BackendUrl}/admin/product-categories`,
-  productCategorySearch: (q: string): string =>
-    `${cado2BackendUrl}/admin/product-categories/search?q=${encodeSegment(q)}`,
-  productCategory: (productId: string): string =>
-    `${cado2BackendUrl}/admin/product-categories/${encodeSegment(productId)}`,
+  productClassifications: `${cado2BackendUrl}/admin/product-classifications`,
+  productClassification: (classification: string): string =>
+    `${cado2BackendUrl}/admin/product-classifications/${encodeSegment(classification)}`,
   // Legal terms: the texts quotes use; Admin › Legal Texts; Legal's terms on a version.
   legalConfig: `${cado2BackendUrl}/legal`,
   adminLegal: `${cado2BackendUrl}/admin/legal`,
   adminLegalText: (key: string): string => `${cado2BackendUrl}/admin/legal/texts/${encodeSegment(key)}`,
   adminLegalNotices: `${cado2BackendUrl}/admin/legal/notices`,
   adminLegalNotice: (id: number): string => `${cado2BackendUrl}/admin/legal/notices/${id}`,
+  adminLegalChanges: `${cado2BackendUrl}/admin/legal/changes`,
   legalTerms: (quoteId: number, versionNumber: number): string =>
     `${cado2BackendUrl}/quotes/${quoteId}/versions/${versionNumber}/legal-terms`,
+  // Deal Desk writes the special terms during its approval (D128).
+  specialTerms: (quoteId: number, versionNumber: number): string =>
+    `${cado2BackendUrl}/quotes/${quoteId}/versions/${versionNumber}/special-terms`,
+  // Deal Desk and Legal lenses (D129, D140).
+  review: (quoteId: number, versionNumber: number): string =>
+    `${cado2BackendUrl}/quotes/${quoteId}/versions/${versionNumber}/review`,
+  // The Deal Desk board, a column at a time (D130).
+  deskColumn: (column: string, query: string): string => `${cado2BackendUrl}/desk/columns/${column}${query ? `?${query}` : ""}`,
   // Supporting documents (DGD-10): the Admin's library of PDFs, and what a
   // quote adds after its order form.
   supportingDocuments: `${cado2BackendUrl}/supporting-documents`,
@@ -2145,12 +2254,15 @@ export const cado2ServiceUrls = {
   adminSupportingDocumentsOrder: `${cado2BackendUrl}/admin/supporting-documents/order`,
   adminSupportingDocument: (id: number, action?: "versions" | "retire" | "restore" | "file"): string =>
     `${cado2BackendUrl}/admin/supporting-documents/${encodeSegment(id)}${action ? `/${action}` : ""}`,
-  // Product bundles: Admins keep them; an AM's
-  // quote reads a parent's children from its price book.
-  adminBundles: `${cado2BackendUrl}/admin/bundles`,
-  adminBundle: (productId: string): string => `${cado2BackendUrl}/admin/bundles/${encodeSegment(productId)}`,
-  bundleChildren: (productId: string, currency: string, pricebookId: string): string =>
-    `${cado2BackendUrl}/bundles/${encodeSegment(productId)}?currency=${encodeSegment(currency)}&pricebookId=${encodeSegment(pricebookId)}`,
+  // Support plans (D155): Admins pick the products; the wizard reads them in quote settings.
+  adminSupportPlans: `${cado2BackendUrl}/admin/support-plans`,
+  // Volume discounts (D169): Admins set each product's quantity tiers and ceilings.
+  adminVolumeDiscounts: `${cado2BackendUrl}/admin/volume-discounts`,
+  adminVolumeDiscountChanges: `${cado2BackendUrl}/admin/volume-discounts/changes`,
+  adminVolumeDiscount: (id: number): string => `${cado2BackendUrl}/admin/volume-discounts/${encodeSegment(id)}`,
+  // Particular products of the quote's price book, e.g. the support plans' (D155).
+  productsByIds: (currency: string, pricebookId: string, ids: readonly string[]): string =>
+    `${cado2BackendUrl}/products?${new URLSearchParams({ currency, pricebookId, ids: ids.join(","), limit: String(Math.max(ids.length, 1)) }).toString()}`,
   // Pricing formulas (D81): read by AMs and Admins; changed by Admins.
   pricingFormulas: `${cado2BackendUrl}/pricing-formulas`,
   adminPricingFormula: (productId: string): string =>
@@ -2193,18 +2305,27 @@ export const salesServiceUrls = {
   // The conversation as timed, speaker-attributed lines — what a synchronised transcript
   // is built from. 404 when the meeting predates the transcript resource name being stored,
   // in which case there is only the Drive document.
-  transcript: (meetingId: number): string =>
-    `${salesBackendUrl}/meetings/${meetingId}/transcript`,
+  //
+  // These three take an optional part id: a call holds a recording, transcript and smart
+  // notes for each time one was started, listed on the meeting. Without one, the backend
+  // serves the first.
+  transcript: (meetingId: number, transcriptId?: number): string =>
+    withPart(`${salesBackendUrl}/meetings/${meetingId}/transcript`, "transcriptId", transcriptId),
   // Gemini's notes, as plain text. Meet writes these only as a Google Doc.
-  smartNotes: (meetingId: number): string =>
-    `${salesBackendUrl}/meetings/${meetingId}/smart-notes`,
+  smartNotes: (meetingId: number, smartNoteId?: number): string =>
+    withPart(`${salesBackendUrl}/meetings/${meetingId}/smart-notes`, "smartNoteId", smartNoteId),
   // A signed, time-limited URL for streaming this meeting's recording. The URL it returns
   // points at drive-service, NOT here — streaming is deliberately not this backend's job.
   // 404 means either playback isn't configured or no recording is attached yet; the two
   // are distinguished by the message, and neither is an error worth a banner.
-  playback: (meetingId: number): string =>
-    `${salesBackendUrl}/meetings/${meetingId}/playback`,
+  playback: (meetingId: number, recordingId?: number): string =>
+    withPart(`${salesBackendUrl}/meetings/${meetingId}/playback`, "recordingId", recordingId),
 };
+
+/** Adds a part id as a query parameter, or leaves the URL as it is without one. */
+function withPart(url: string, name: string, partId: number | undefined): string {
+  return partId === undefined ? url : `${url}?${name}=${partId}`;
+}
 
 /**
  * Build the meetings URL with only the filters that are actually set.
@@ -2422,3 +2543,69 @@ export const agentOrchestratorServiceUrls = {
   health: `${agentOrchestratorBackendUrl}/health`,
 };
 
+// Swag Store — employees spend O2C coins on WSO2 swag. Its own backend,
+// configured with the version segment included and no `/api` prefix after it.
+// Unset means "not connected": the store's pages say so and make no requests.
+// Gated as a whole by the `swagStore` preview flag as well (previewFeatures.ts).
+export const swagStoreBackendUrl: string = stripTrailingSlashes(
+  window.config?.ONE_WSO2_SWAG_STORE_BACKEND_URL ?? "",
+);
+
+/** Whether the Swag Store backend URL is set. */
+export function isSwagStoreBackendConfigured(): boolean {
+  return Boolean(swagStoreBackendUrl);
+}
+
+/** Every shopper endpoint of the Swag Store backend. Path parameters are encoded here. */
+export const swagStoreServiceUrls = {
+  /** The caller, their store roles and employee status. 403 `not_wso2` outside WSO2. */
+  me: `${swagStoreBackendUrl}/users/me`,
+  /** The caller's coin wallets, default first. Never cached by the backend. */
+  wallets: `${swagStoreBackendUrl}/wallets`,
+  categories: `${swagStoreBackendUrl}/categories`,
+  /** Active products; filters, sort and paging go in the query string. */
+  products: `${swagStoreBackendUrl}/products`,
+  product: (slug: string): string => `${swagStoreBackendUrl}/products/${encodeURIComponent(slug)}`,
+  cart: `${swagStoreBackendUrl}/cart`,
+  /** Item count only, for the top-bar badge. */
+  cartSummary: `${swagStoreBackendUrl}/cart/summary`,
+  cartLines: `${swagStoreBackendUrl}/cart/lines`,
+  cartLine: (id: string): string => `${swagStoreBackendUrl}/cart/lines/${encodeURIComponent(id)}`,
+  pickupOffices: `${swagStoreBackendUrl}/pickup-offices`,
+  /** POST, but a read: prices the cart for an office and wallet, and stores nothing. */
+  quotes: `${swagStoreBackendUrl}/quotes`,
+  /** GET lists the caller's orders; POST places one (needs an Idempotency-Key header). */
+  orders: `${swagStoreBackendUrl}/orders`,
+  order: (orderNo: string): string => `${swagStoreBackendUrl}/orders/${encodeURIComponent(orderNo)}`,
+  /** Retries the payment of a PENDING_PAYMENT order with its same reference. */
+  orderPayments: (orderNo: string): string =>
+    `${swagStoreBackendUrl}/orders/${encodeURIComponent(orderNo)}/payments`,
+  stockAlerts: `${swagStoreBackendUrl}/stock-alerts`,
+  stockAlert: (id: string): string => `${swagStoreBackendUrl}/stock-alerts/${encodeURIComponent(id)}`,
+  /** The store team's endpoints. The backend checks the caller's store role on every one. */
+  admin: {
+    /** Counts per role: catalog for catalog managers, orders for fulfilment ops. */
+    dashboard: `${swagStoreBackendUrl}/admin/dashboard`,
+    /** POST with filters, so search text never goes into a URL. `Accept: text/csv` exports the same rows. */
+    ordersSearch: `${swagStoreBackendUrl}/admin/orders/search`,
+    order: (orderNo: string): string => `${swagStoreBackendUrl}/admin/orders/${encodeURIComponent(orderNo)}`,
+    orderNotes: (orderNo: string): string =>
+      `${swagStoreBackendUrl}/admin/orders/${encodeURIComponent(orderNo)}/notes`,
+    pickupOffices: `${swagStoreBackendUrl}/admin/pickup-offices`,
+    pickupOffice: (id: string): string => `${swagStoreBackendUrl}/admin/pickup-offices/${encodeURIComponent(id)}`,
+    products: `${swagStoreBackendUrl}/admin/products`,
+    product: (id: string): string => `${swagStoreBackendUrl}/admin/products/${encodeURIComponent(id)}`,
+    removalImpact: (id: string): string =>
+      `${swagStoreBackendUrl}/admin/products/${encodeURIComponent(id)}/removal-impact`,
+    productOptions: (id: string): string => `${swagStoreBackendUrl}/admin/products/${encodeURIComponent(id)}/options`,
+    /** Pending stock alerts per variant, most wanted first. */
+    demand: `${swagStoreBackendUrl}/admin/demand`,
+    /** POST one photo as multipart/form-data (view + file). */
+    productImages: (id: string): string => `${swagStoreBackendUrl}/admin/products/${encodeURIComponent(id)}/images`,
+    productVariant: (id: string, variantId: string): string =>
+      `${swagStoreBackendUrl}/admin/products/${encodeURIComponent(id)}/variants/${encodeURIComponent(variantId)}`,
+    stockMovements: (variantId: string): string =>
+      `${swagStoreBackendUrl}/admin/variants/${encodeURIComponent(variantId)}/stock-movements`,
+    categories: `${swagStoreBackendUrl}/admin/categories`,
+  },
+};

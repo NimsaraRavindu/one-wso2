@@ -33,9 +33,10 @@ import { useEditCampaign } from "../api/useAmplifyMutations";
 import { describeAmplifyError } from "../util/amplifyError";
 import { closesAtFromDateInput } from "../util/linkedinPost";
 import CategoryPicker from "./CategoryPicker";
+import DeletePostDialog from "./DeletePostDialog";
 
 /**
- * Update Post: the card fields Amplify owns (headline, summary, image,
+ * Update Post: the card fields Amplify owns (headline, summary, post link, image,
  * category, priority, tracking end). The post itself is edited on LinkedIn.
  * Sends the version it read; a stale one comes back as VERSION_CONFLICT.
  *
@@ -47,9 +48,11 @@ export default function EditPostDialog({ campaign, onClose }: { campaign: Campai
   const [title, setTitle] = useState(campaign.title);
   const [summary, setSummary] = useState(campaign.summary ?? "");
   const [imageUrl, setImageUrl] = useState(campaign.imageUrl ?? "");
+  const [resourceUrl, setResourceUrl] = useState(campaign.resourceUrl ?? "");
   const [category, setCategory] = useState(campaign.categoryCode);
   const [isPriority, setIsPriority] = useState(campaign.isPriority);
   const [trackUntil, setTrackUntil] = useState(campaign.closesAt.slice(0, 10));
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const busy = edit.isPending;
 
   const save = () => {
@@ -62,6 +65,8 @@ export default function EditPostDialog({ campaign, onClose }: { campaign: Campai
           title: title.trim(),
           summary: summary.trim(),
           imageUrl: imageUrl.trim() || undefined,
+          // Sent only when it changed; blank clears the link (amplify-api validates the origin).
+          resourceUrl: resourceUrl.trim() !== (campaign.resourceUrl ?? "") ? resourceUrl.trim() : undefined,
           categoryCode: category,
           isPriority,
           closesAt: closesAtFromDateInput(trackUntil),
@@ -103,6 +108,15 @@ export default function EditPostDialog({ campaign, onClose }: { campaign: Campai
             disabled={busy}
           />
           <TextField
+            label="Post URL"
+            placeholder="https://www.linkedin.com/feed/update/urn:li:share:…"
+            value={resourceUrl}
+            onChange={(e) => setResourceUrl(e.target.value)}
+            fullWidth
+            slotProps={{ htmlInput: { maxLength: 2048 } }}
+            disabled={busy}
+          />
+          <TextField
             label="Image URL (optional)"
             value={imageUrl}
             onChange={(e) => setImageUrl(e.target.value)}
@@ -125,14 +139,22 @@ export default function EditPostDialog({ campaign, onClose }: { campaign: Campai
           />
         </Box>
       </DialogContent>
-      <DialogActions sx={{ px: 3 }}>
-        <Button onClick={onClose} disabled={busy}>
-          Cancel
+      <DialogActions sx={{ px: 3, justifyContent: "space-between" }}>
+        <Button color="error" onClick={() => setConfirmingDelete(true)} disabled={busy}>
+          Delete
         </Button>
-        <Button variant="contained" onClick={save} disabled={busy || !title.trim()}>
-          {busy ? "Saving…" : "Save"}
-        </Button>
+        <Box sx={{ display: "flex", gap: 1 }}>
+          <Button onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={save} disabled={busy || !title.trim()}>
+            {busy ? "Saving…" : "Save"}
+          </Button>
+        </Box>
       </DialogActions>
+      {confirmingDelete && (
+        <DeletePostDialog campaign={campaign} onCancel={() => setConfirmingDelete(false)} onDeleted={onClose} />
+      )}
     </Dialog>
   );
 }

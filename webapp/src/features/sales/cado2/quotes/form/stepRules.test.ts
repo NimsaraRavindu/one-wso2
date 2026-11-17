@@ -24,6 +24,8 @@ const complete = (): DraftFormValues => ({
   ...fromVersion({ ...fullPartnerQuote, version: { ...fullPartnerQuote.version, status: "DRAFT" } }),
   partnerContractName: "Value Added Reseller",
   partnerContractDate: "2024-03-12",
+  // The fixture's billing contact was typed in, which no longer counts (D124).
+  billingContact: { mode: "salesforce", sfContactId: "003000000000002", name: "Ana Payables", title: "", email: "ap@acme.example" },
 });
 
 describe("stepChecks", () => {
@@ -31,6 +33,12 @@ describe("stepChecks", () => {
     const checks = stepChecks(complete());
     expect(checks).toEqual([[], [], [], []]);
     expect(reachableStep(checks)).toBe(4);
+  });
+
+  // D124: a contact typed in before doesn't count; it's chosen again from the opportunity.
+  it("asks again for a billing contact that was typed in", () => {
+    const typedIn = { ...complete(), billingContact: { mode: "manual" as const, sfContactId: "", name: "Jane Payables", title: "", email: "" } };
+    expect(stepChecks(typedIn)[2].map((c) => c.field)).toEqual(["contacts.billing"]);
   });
 
   it("starts a new quote at Overview with everything to choose", () => {
@@ -96,7 +104,8 @@ describe("stepChecks", () => {
     expect(products({ yearCount: 3 })).toEqual([]);
     expect(products({ yearCount: 2, lastYearEndDate: "2028-03-31" })).toEqual([]);
     expect(products({ yearCount: 2, lastYearEndDate: "2028-10-01" })[0].message).toMatch(/at most 12 months/);
-    const late = { ...complete().lines[0], startDate: "2027-10-01" }; // after Year 1 ends
+    // A one-off line after Year 1 ends (D146).
+    const late = { ...complete().lines[0], recurring: false, startDate: "2027-10-01" };
     expect(products({ lines: [late] }).map((c) => c.field)).toEqual(["lines[0].startDate"]);
   });
 
@@ -130,10 +139,12 @@ describe("stepChecks", () => {
     expect(products({ dealType: "DIRECT", partnerCommissionPercent: "" })).toEqual([]);
   });
 
-  it("needs a category on every line brought in from Salesforce (D72)", () => {
+  it("stops a line whose classification isn't set up (D152)", () => {
     const v = complete();
     const lines = v.lines.map((l, i) => (i === 0 ? { ...l, category: "" as const } : l));
-    expect(stepChecks({ ...v, lines })[1].map((c) => c.message)).toContain("Choose the category of 1 product");
+    expect(stepChecks({ ...v, lines })[1].map((c) => c.message)).toContain(
+      "1 product can't be quoted: its classification isn't set up",
+    );
   });
 
   it("needs no term when no product recurs in Salesforce (D76)", () => {
@@ -155,5 +166,16 @@ describe("reachableStep and nextHint", () => {
     expect(nextHint([{ field: "a", message: "Choose the currency" }, { field: "b", message: "x" }, { field: "c", message: "y" }])).toBe(
       "Choose the currency (+2 more)",
     );
+  });
+});
+
+// D151: each year's rate is checked on its own.
+describe("commission per year", () => {
+  it("asks for every year's rate", () => {
+    const v = { ...complete(), yearCount: 2, partnerCommissionByYear: ["15", "abc"] };
+    const products = stepChecks(v)[1];
+    expect(products.map((c) => c.field)).toContain("partnerCommissionByYear[1]");
+    expect(products.map((c) => c.field)).not.toContain("partnerCommissionByYear[0]");
+    expect(products.find((c) => c.field === "partnerCommissionByYear[1]")?.message).toMatch(/^Year 2: /);
   });
 });

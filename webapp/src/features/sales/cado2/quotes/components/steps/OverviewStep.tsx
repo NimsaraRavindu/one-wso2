@@ -19,10 +19,9 @@ import { Controller, useFormContext, useWatch } from "react-hook-form";
 import ErrorNotice from "@components/error-notice/ErrorNotice";
 import { Alert, AlertTitle, Box, Chip, MenuItem, Stack, TextField, Typography } from "@wso2/oxygen-ui";
 import {
-  useAccountContacts,
+  useOpportunityContacts,
   useAccountOpportunities,
   useActiveLegalEntities,
-  useCurrencies,
 } from "@features/sales/cado2/quotes/api/useQuoteApi";
 import type { Account, Opportunity } from "@features/sales/cado2/quotes/api/quoteTypes";
 import {
@@ -101,7 +100,6 @@ const DEAL_KIND_LABEL = { FIRST_SALE: "First Sale", RENEWAL: "Renewal", EXPANSIO
 function accountFindings(
   account: { place: string; salesRegion: string; subRegion: string },
   opportunities: number | null,
-  contacts: number | null,
 ): Finding[] {
   // null = the lookup failed: say so, never "None found" (2026-10-13).
   // No "Account" line: the chosen account is shown just above, more prominently.
@@ -122,12 +120,6 @@ function accountFindings(
             : "None found",
       warning: !opportunities,
     },
-    {
-      key: "contacts",
-      label: "Contacts",
-      value: contacts === null ? "Couldn't load from Salesforce" : contacts ? `${contacts} found` : "None found",
-      warning: contacts === null,
-    },
   ];
 }
 
@@ -135,7 +127,7 @@ function accountFindings(
  * Stage ③: what Salesforce says about the chosen opportunity.
  * Problems only Salesforce can fix are warning lines here.
  */
-function dealFindings(v: DraftFormValues, o: Opportunity | undefined): Finding[] {
+function dealFindings(v: DraftFormValues, o: Opportunity | undefined, contacts: number | null): Finding[] {
   const out: Finding[] = [];
   if (v.dealKind === "OTHER") {
     out.push({
@@ -174,6 +166,18 @@ function dealFindings(v: DraftFormValues, o: Opportunity | undefined): Finding[]
   if (o?.arr !== null && o?.arr !== undefined) {
     out.push({ key: "arr", label: "ARR in Salesforce", value: `${o.currencyIsoCode ?? ""} ${formatMoney(o.arr.toFixed(2))}`.trim() });
   }
+  // The billing contact is chosen from these (D124): say early when there are none.
+  out.push({
+    key: "contacts",
+    label: "Contacts",
+    value:
+      contacts === null
+        ? "Couldn't load from Salesforce"
+        : contacts
+          ? `${contacts} on this opportunity`
+          : "None on this opportunity. Add the billing contact to it in Salesforce before Commercials.",
+    warning: !contacts,
+  });
   return out;
 }
 
@@ -209,10 +213,8 @@ export default function OverviewStep({ locked, quoteId = null }: OverviewStepPro
   // Open opportunities to quote (2026-10-09); a renewal renews closed-won ones.
   const opportunities = useAccountOpportunities(accountId || null);
   const wonOpportunities = useAccountOpportunities(isRenewal && accountId ? accountId : null, "won");
-  const contacts = useAccountContacts(accountId || null);
+  const contacts = useOpportunityContacts(opportunityId || null);
   const legalEntities = useActiveLegalEntities();
-  // For pre-filling the quote's currency from the opportunity.
-  const currencies = useCurrencies();
 
   const oppIssue = useFieldIssue("sfOpportunityId");
   const previousIssue = useFieldIssue("previousOpportunityIds");
@@ -237,7 +239,7 @@ export default function OverviewStep({ locked, quoteId = null }: OverviewStepPro
     setValue("recordTypeName", "", { shouldDirty: true });
     setValue("isRenewal", false, { shouldDirty: true });
     setValue("previousOpportunityIds", [], { shouldDirty: true });
-    for (const f of ["billingContact", "securityContact"] as const)
+    for (const f of ["billingContact", "securityContact", "legalContact"] as const)
       setValue(f, { ...emptyContact }, { shouldDirty: true });
     setValue("billTo", { ...emptyAddress }, { shouldDirty: true });
     setValue("shipTo", { ...emptyAddress }, { shouldDirty: true });
@@ -265,12 +267,11 @@ export default function OverviewStep({ locked, quoteId = null }: OverviewStepPro
     const v = getValues();
     const customer = addressFrom(v.accountId, v.accountName, v.accountAddress);
     // Currency and price book from the opportunity: its products all
-    // come from one book. Only a currency CadO2 offers; Products & Pricing
-    // drops a book with no active products in it, and says why.
-    const offered = Boolean(o.currencyIsoCode && currencies.data?.includes(o.currencyIsoCode));
-    setValue("currencyIsoCode", offered ? (o.currencyIsoCode ?? "") : "", { shouldDirty: true });
-    setValue("defaultPricebookId", offered ? (o.pricebook?.id ?? "") : "", { shouldDirty: true });
-    setValue("defaultPricebookName", offered ? (o.pricebook?.name ?? "") : "", { shouldDirty: true });
+    // come from one book. What it lacks, the AM chooses on Products &
+    // Pricing (D142), which also drops a book with no active products.
+    setValue("currencyIsoCode", o.currencyIsoCode ?? "", { shouldDirty: true });
+    setValue("defaultPricebookId", o.pricebook?.id ?? "", { shouldDirty: true });
+    setValue("defaultPricebookName", o.pricebook?.name ?? "", { shouldDirty: true });
     if (o.dealType === "PARTNER" && o.partner?.id) {
       setValue("billTo", addressFrom(o.partner.id, o.partner.name ?? "", o.partner.billingAddress), {
         shouldDirty: true,
@@ -327,7 +328,7 @@ export default function OverviewStep({ locked, quoteId = null }: OverviewStepPro
             key={accountId}
             title="Found in Salesforce for This Account"
             onDone={markAccountRevealed}
-            loading={opportunities.isPending || contacts.isPending}
+            loading={opportunities.isPending}
             findings={accountFindings(
               {
                 place: [accountAddress?.city, accountAddress?.country].filter(Boolean).join(", "),
@@ -335,7 +336,6 @@ export default function OverviewStep({ locked, quoteId = null }: OverviewStepPro
                 subRegion: accountSubRegion,
               },
               opportunities.error ? null : (opportunities.data ?? []).length,
-              contacts.error ? null : (contacts.data ?? []).length,
             )}
             animate={!locked}
           />
@@ -396,8 +396,12 @@ export default function OverviewStep({ locked, quoteId = null }: OverviewStepPro
           <SalesforceFindings
             key={opportunityId}
             title="What Salesforce Says About This Deal"
-            loading={!locked && opportunities.isPending}
-            findings={dealFindings(values, opportunities.data?.find((o) => o.id === opportunityId))}
+            loading={(!locked && opportunities.isPending) || contacts.isPending}
+            findings={dealFindings(
+              values,
+              opportunities.data?.find((o) => o.id === opportunityId),
+              contacts.error ? null : (contacts.data ?? []).length,
+            )}
             animate={!locked}
             onDone={markRevealed}
           />

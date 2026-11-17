@@ -111,6 +111,18 @@ export interface ApprovalPreview {
   readonly notes: readonly string[];
   /** The draft can't be evaluated yet; why. */
   readonly invalid: readonly Issue[];
+  /** The matrix the preview used, for the quote's matrix view (D176); null when the draft couldn't be evaluated. */
+  readonly matrix: ApprovalMatrix | null;
+  /** Where each line sits in `matrix`. */
+  readonly lines: readonly ApprovalLinePlacement[];
+}
+
+/** A quote line in the matrix (D176): its group (null = none covers it) and the highest approver its discount reaches. */
+export interface ApprovalLinePlacement {
+  readonly lineNumber: number;
+  readonly productName: string;
+  readonly groupCode: string | null;
+  readonly reachedRole: string | null;
 }
 
 export interface ApprovalPreviewInput {
@@ -125,6 +137,17 @@ export interface ApprovalWorkflow {
   readonly createdAt: string;
   readonly completedAt: string | null;
   readonly steps: readonly ApprovalStep[];
+  /** Why the version this one was revised from was returned (D128); null otherwise. */
+  readonly previousReturn?: PreviousReturn | null;
+}
+
+/** The return that ended the earlier version. */
+export interface PreviousReturn {
+  readonly versionNumber: number;
+  readonly roleLabel: string;
+  readonly byEmail: string | null;
+  readonly at: string | null;
+  readonly comment: string | null;
 }
 
 export type ApprovalOutcome = "approve" | "return";
@@ -142,14 +165,17 @@ export interface ApprovalInboxItem {
   readonly quoteId: number;
   readonly quoteNumber: string;
   readonly versionNumber: number;
+  /** Salesforce Ids, for grouping by account and opportunity (D144). */
+  readonly sfAccountId: string;
+  readonly sfOpportunityId: string;
   readonly accountName: string | null;
   readonly opportunityName: string | null;
+  /** The customer's region, for the Region filter; `region` is the step's, null for a global role. */
+  readonly accountSalesRegion?: string | null;
   readonly currencyIsoCode: string | null;
   readonly tcv: string;
   readonly submittedByEmail: string | null;
   readonly submittedAt: string | null;
-  /** Lines whose category the rep chose for an unmapped product. */
-  readonly repCategorisedLines?: number;
 }
 
 // --- Admin matrix ----------------------------------------------------------
@@ -272,3 +298,40 @@ export interface ApprovalSlaChange {
   readonly changedAt: string;
 }
 
+
+/** The approval role whose notes a lens shows (D129): any approver; Deal Desk and Legal also write in the quote. */
+export type LensRole = ApprovalRole;
+
+/** A note's state: DONE for a note to write (Legal's terms) once written, else OPEN (D140: nothing to mark). */
+export type ReviewNoteState = "OPEN" | "DONE";
+
+/**
+ * One note of a lens (D129): something on the quote a rule flagged, and where
+ * it is. `target` is "line:2", or paymentTerms, billingFrequency, term,
+ * startDate, arr, specialTerms, governingTerms.
+ */
+export interface ReviewNote {
+  readonly key: string;
+  readonly rule: string;
+  readonly lineNumber: number;
+  /** The rule sentences, as on the approval. */
+  readonly reasons: readonly string[];
+  /** Who approves it after Deal Desk; empty on Legal's lens and Deal Desk's own checks. */
+  readonly roles: readonly string[];
+  readonly target: string;
+  /** The approver writes it (Legal's non-standard governing terms). */
+  readonly yoursToWrite: boolean;
+  readonly state: ReviewNoteState;
+}
+
+/** One role's lens: its notes. */
+export interface ReviewLens {
+  readonly role: LensRole;
+  readonly roleLabel: string;
+  readonly notes: readonly ReviewNote[];
+}
+
+/** A version through the caller's lenses; none for a draft. */
+export interface Review {
+  readonly lenses: readonly ReviewLens[];
+}

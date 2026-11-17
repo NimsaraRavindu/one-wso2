@@ -134,6 +134,7 @@ import ScorecardPage from "@features/amplify/pages/dashboards/ScorecardBoard";
 import MasterDataRoute from "@components/route-guards/MasterDataRoute";
 import AdCampaignsAnalyticsPage from "@features/marketing-ops/ad-campaigns/pages/AdCampaignsAnalyticsPage";
 import CampaignTrackerPage from "@features/marketing-ops/ad-campaigns/pages/CampaignTrackerPage";
+import BenchmarkGradingPage from "@features/marketing-ops/ad-campaigns/pages/BenchmarkGradingPage";
 import UtmGeneratorPage from "@features/marketing-ops/utilities/pages/UtmGeneratorPage";
 import AssetNameGeneratorPage from "@features/marketing-ops/utilities/pages/AssetNameGeneratorPage";
 import UtmSettingsPage from "@features/marketing-ops/admin/pages/UtmSettingsPage";
@@ -144,7 +145,10 @@ import EventsSettingsPage from "@features/marketing-ops/admin/pages/EventsSettin
 import EventsNotificationsPage from "@features/marketing-ops/admin/pages/EventsNotificationsPage";
 import MarketingAdminRoute from "@features/marketing-ops/components/MarketingAdminRoute";
 import PostBuilderPage from "@features/marketing-ops/design-studio/pages/PostBuilderPage";
+import MarketingCalendarPage from "@features/marketing-ops/marketing-calendar/pages/MarketingCalendarPage";
+import { marketingCalendarViewRoutes } from "@features/marketing-ops/marketing-calendar/routes";
 import {
+  EventsLeadImportPage,
   EventsMinePage,
   EventsReviewPage,
 } from "@features/marketing-ops/events/pages/EventsPages";
@@ -171,6 +175,8 @@ import GeneralHistoryTab, {
 } from "@features/leave/pages/LeaveHistoryPage";
 import SabbaticalApproveTab from "@features/leave/components/SabbaticalApproveTab";
 import SabbaticalApprovalHistoryTab from "@features/leave/components/SabbaticalApprovalHistoryTab";
+import OtherAuthorizedApproveTab from "@features/leave/components/OtherAuthorizedApproveTab";
+import OtherAuthorizedApprovalHistoryTab from "@features/leave/components/OtherAuthorizedApprovalHistoryTab";
 // Lazy on purpose. This is the only screen that pulls in the DataGrid, which
 // costs ~115 kB gzipped — and only leads and People Ops can open it, so loading
 // it for everyone taxes the many for the few. The sabbatical approve and report
@@ -178,6 +184,9 @@ import SabbaticalApprovalHistoryTab from "@features/leave/components/SabbaticalA
 const GeneralReportTab = lazy(() => import("@features/leave/pages/LeaveReportsPage"));
 const SabbaticalReportTab = lazy(
   () => import("@features/leave/components/SabbaticalReportTab"),
+);
+const SickNotesReportTab = lazy(
+  () => import("@features/leave/components/SickNotesReportTab"),
 );
 // Sales Library: loaded when its page is opened.
 const LibraryPage = lazy(() => import("@features/sales/smartSearch/pages/LibraryPage"));
@@ -199,6 +208,7 @@ import CcPendingPage from "@features/finance/cc/pages/CcPendingPage";
 import CcApprovePage from "@features/finance/cc/pages/CcApprovePage";
 import CcHistoryPage from "@features/finance/cc/pages/CcHistoryPage";
 import CcAdminPage from "@features/finance/cc/pages/CcAdminPage";
+import CcAutofillRulesPage from "@features/finance/cc/pages/CcAutofillRulesPage";
 import { ccPaths } from "@features/finance/cc/ccPaths";
 import SubsidiariesPage from "@features/finance/masterdata/pages/SubsidiariesPage";
 import DepartmentsPage from "@features/finance/masterdata/pages/DepartmentsPage";
@@ -224,6 +234,8 @@ import { auditRoutes } from "@features/security/grc/modules/audit/routes";
 import { adminRoutes } from "@features/security/grc/modules/admin/routes";
 import { evidenceRoutes } from "@features/security/evidence-portal/routes";
 import { cado2Routes } from "@features/sales/cado2/routes";
+import { swagStoreAdminRoutes, swagStoreShopRoutes } from "@features/swag-store/routes";
+import { procurementRoutes } from "@features/finance/procurement/routes";
 import PartnersListPage from "@features/due-diligence/partners/pages/PartnersListPage";
 import PartnerPendingPage from "@features/due-diligence/partners/pages/PartnerPendingPage";
 import PartnerDashboardPage from "@features/due-diligence/partners/pages/PartnerDashboardPage";
@@ -245,11 +257,17 @@ import UmtUpdateView from "@features/umt/pages/UmtUpdateView";
 import UmtUpdatesPage from "@features/umt/pages/UmtUpdatesPage";
 import { engineeringRoutes } from "@features/engineering/routes";
 import InfraHomePage from "@features/infra/pages/InfraHomePage";
+import InfraPerspectiveLanding from "@features/infra/pages/InfraPerspectiveLanding";
 import InfraNewRepositoryPage from "@features/infra/pages/InfraNewRepositoryPage";
 import InfraGitHubCallbackPage from "@features/infra/pages/InfraGitHubCallbackPage";
 import InfraRepositoryAccessPage from "@features/infra/pages/InfraRepositoryAccessPage";
 import InfraGitHubSettingsPage from "@features/infra/pages/InfraGitHubSettingsPage";
 import InfraMyRequestsPage from "@features/infra/pages/InfraMyRequestsPage";
+import InfraReviewRequestsPage, {
+  InfraReviewAllTab,
+  InfraReviewAssignedTab,
+  InfraReviewRequestsIndex,
+} from "@features/infra/pages/InfraReviewRequestsPage";
 
 export default function App() {
   return (
@@ -275,7 +293,8 @@ export default function App() {
           <Route path="engineering/umt/release-chunks" element={<UmtReleaseChunksPage />} />
           <Route path="engineering/umt/release-chunks/new" element={<UmtCreateReleaseChunkPage />} />
           <Route path="engineering/umt/statistics" element={<UmtStatisticsPage />} />
-          <Route path="infra" element={<InfraHomePage />} />
+          <Route path="infra" element={<InfraPerspectiveLanding />} />
+          <Route path="infra/github/connection" element={<InfraHomePage />} />
           <Route
             path="infra/github/repository-requests"
             element={<InfraNewRepositoryPage />}
@@ -287,6 +306,14 @@ export default function App() {
           />
           <Route path="infra/admin/github-settings" element={<InfraGitHubSettingsPage />} />
           <Route path="infra/github/my-requests" element={<InfraMyRequestsPage />} />
+          <Route
+            path="infra/github/review-repository-requests"
+            element={<InfraReviewRequestsPage />}
+          >
+            <Route index element={<InfraReviewRequestsIndex />} />
+            <Route path="assigned" element={<InfraReviewAssignedTab />} />
+            <Route path="all" element={<InfraReviewAllTab />} />
+          </Route>
           {/* My Team — placeholder for now; the real subordinates view is on
               hold this iteration (mirrors people-app's lead-only nav item). */}
           {/* My Team — a lead's reporting chain, ported from people-app. */}
@@ -343,24 +370,46 @@ export default function App() {
               />
             </Route>
 
-            {/* Single-kind tabs carry no kind segment: general leave has no
-                approval step, so there is no choice to name in the URL. */}
-            <Route
-              path="approvals"
-              element={
-                <LeaveKindRoute gateId="leave-approve">
-                  <SabbaticalApproveTab />
-                </LeaveKindRoute>
-              }
-            />
-            <Route
-              path="approval-history"
-              element={
-                <LeaveKindRoute gateId="leave-approve">
-                  <SabbaticalApprovalHistoryTab />
-                </LeaveKindRoute>
-              }
-            />
+            {/* Both approval tabs name their kind. The bare URLs (the old,
+                sabbatical-only ones) redirect to the first kind. */}
+            <Route path="approvals">
+              <Route index element={<LeaveTabIndex segment="approvals" />} />
+              <Route
+                path="sabbatical"
+                element={
+                  <LeaveKindRoute gateId="leave-approve">
+                    <SabbaticalApproveTab />
+                  </LeaveKindRoute>
+                }
+              />
+              <Route
+                path="other-authorized"
+                element={
+                  <LeaveKindRoute gateId="leave-approve">
+                    <OtherAuthorizedApproveTab />
+                  </LeaveKindRoute>
+                }
+              />
+            </Route>
+            <Route path="approval-history">
+              <Route index element={<LeaveTabIndex segment="approval-history" />} />
+              <Route
+                path="sabbatical"
+                element={
+                  <LeaveKindRoute gateId="leave-approve">
+                    <SabbaticalApprovalHistoryTab />
+                  </LeaveKindRoute>
+                }
+              />
+              <Route
+                path="other-authorized"
+                element={
+                  <LeaveKindRoute gateId="leave-approve">
+                    <OtherAuthorizedApprovalHistoryTab />
+                  </LeaveKindRoute>
+                }
+              />
+            </Route>
 
             <Route path="reports">
               <Route index element={<LeaveTabIndex segment="reports" />} />
@@ -382,6 +431,16 @@ export default function App() {
                   <LeaveKindRoute gateId="leave-reports-sabbatical">
                     <Suspense fallback={<Skeleton variant="rectangular" height={220} sx={{ borderRadius: 1.5 }} />}>
                       <SabbaticalReportTab />
+                    </Suspense>
+                  </LeaveKindRoute>
+                }
+              />
+              <Route
+                path="sick-notes"
+                element={
+                  <LeaveKindRoute gateId="leave-sick-notes">
+                    <Suspense fallback={<Skeleton variant="rectangular" height={220} sx={{ borderRadius: 1.5 }} />}>
+                      <SickNotesReportTab />
                     </Suspense>
                   </LeaveKindRoute>
                 }
@@ -440,6 +499,7 @@ export default function App() {
           <Route path="finance/cc/approve" element={<CcApprovePage />} />
           <Route path="finance/cc/history" element={<CcHistoryPage />} />
           <Route path="finance/cc/admin" element={<CcAdminPage />} />
+          <Route path="finance/cc/autofill-rules" element={<CcAutofillRulesPage />} />
           {/* Old Settings bookmarks */}
           <Route path="finance/cc/settings" element={<Navigate to={ccPaths.admin} replace />} />
           <Route path="finance/opd/dashboard" element={<OpdDashboardScreen />} />
@@ -515,6 +575,9 @@ export default function App() {
             <Route path={misPaths.legacyAnalysis} element={<MisAnalysisRedirect />} />
           </Route>
           <Route path="people-ops" element={<PerspectiveLanding />} />
+          {/* People Ops → Swag Store: the store team's screens. Its own shell
+              checks the store's roles; People Ops' admin privilege plays no part. */}
+          {isPreviewEnabled("swagStore") && swagStoreAdminRoutes}
           {/* People Ops → Org Chart: the company's reporting hierarchy, ported
               from the standalone org-chart app. Unlike every other People Ops
               screen, this is NOT admin-gated — it has its own access model.
@@ -920,6 +983,13 @@ export default function App() {
             path="marketing-ops/ad-campaigns/campaign-tracker"
             element={<CampaignTrackerPage />}
           />
+          {/* Ad Campaigns → Benchmark Grading. Every campaign scored on
+              conversion and cost against WSO2's benchmarks; grading is computed
+              client-side from the backend's raw campaign lines. */}
+          <Route
+            path="marketing-ops/ad-campaigns/benchmark-grading"
+            element={<BenchmarkGradingPage />}
+          />
           {/* Utilities — open to any authorized Marketing Ops caller. */}
           <Route path="marketing-ops/utilities/utm" element={<UtmGeneratorPage />} />
           <Route
@@ -937,6 +1007,10 @@ export default function App() {
             <Route path="events" element={<EventsSettingsPage />} />
             <Route path="events-notifications" element={<EventsNotificationsPage />} />
           </Route>
+          {/* Events → Lead Import. Held back by the `eventsLeadImport` preview flag. */}
+          {isPreviewEnabled("eventsLeadImport") && (
+            <Route path="marketing-ops/events/lead-import" element={<EventsLeadImportPage />} />
+          )}
           <Route path="marketing-ops/events/mine" element={<EventsMinePage />} />
           <Route path="marketing-ops/events/review" element={<EventsReviewPage />} />
           {/* Event Platform — event agendas, speakers and swag shops, a different
@@ -957,6 +1031,14 @@ export default function App() {
             path="marketing-ops/design-studio/post-builder"
             element={<PostBuilderPage />}
           />
+          {/* Marketing Calendar — a read-only month of what the marketing team plans in
+              GitHub, one tab per view (All, Events, Content, Social, Email) under a
+              shared layout. Held back by the `marketingCalendar` preview flag. */}
+          {isPreviewEnabled("marketingCalendar") && (
+            <Route path="marketing-ops/marketing-calendar" element={<MarketingCalendarPage />}>
+              {marketingCalendarViewRoutes}
+            </Route>
+          )}
           {/* Sales opens on the first rail row the caller can see, which is
               Echo → Meetings (`forwardsToFirstItem`); someone the backend
               refuses is told so here, by PerspectiveLanding. */}
@@ -976,7 +1058,9 @@ export default function App() {
           {/* Sales → CadO2, the quote tool. Its whole route tree, behind the `cado2`
               preview flag; Cado2Shell resolves access for every page. See
               @features/sales/cado2/routes and docs/ported-apps/cado2.md. */}
-          {isPreviewEnabled("cado2") && cado2Routes}
+          {isPreviewEnabled("quickquote") && cado2Routes}
+          {/* Finance → Procurement, behind the `procurement` preview flag. */}
+          {isPreviewEnabled("procurement") && procurementRoutes}
           {/* Deals — MEDDPICC per Opportunity, from the MEDDPICC backend (shows a
               not-connected state when ONE_WSO2_ECHO_BACKEND_URL is unset). */}
           <Route path="sales/deals" element={<SalesDealsPage />} />
@@ -1064,6 +1148,9 @@ export default function App() {
               <Route path="amplify/connect/callback" element={<LinkedInCallbackPage />} />
             </>
           )}
+          {/* Swag Store's shop, behind its preview flag like the rail entry and
+              the top-bar button. SwagStoreShell resolves access for every page. */}
+          {isPreviewEnabled("swagStore") && swagStoreShopRoutes}
           {/* Legal perspective — currently just a second entry point into Due
               Diligence, alongside Finance (see the finance/ routes below and
               DUE_DILIGENCE_APPS). */}

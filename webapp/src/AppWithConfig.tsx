@@ -22,6 +22,7 @@ import { BrowserRouter } from "react-router";
 import { authConfig } from "@config/authConfig";
 import { ThemePreferenceProvider } from "@context/theme/ThemePreferenceContext";
 import { PerspectiveProvider } from "@context/perspective/PerspectiveContext";
+import { RailBadgeProvider } from "@components/side-rail/RailBadgeProvider";
 import { NotificationsProvider } from "@context/notifications/NotificationsContext";
 import { HttpError } from "@api/http";
 import { registerAuthAccessors } from "@api/authBridge";
@@ -79,6 +80,10 @@ const queryClient = new QueryClient({
 // deployments set no such URL and keep the stock provider.
 const AuthProvider = authConfig.wellKnownEndpoint ? ThunderProvider : AsgardeoProvider;
 
+/**
+ * The app inside the providers every screen needs: sign-in, queries, theme, routing, the active perspective, rail
+ * badges and notifications. In the silent sign-in frame, only the sign-in provider runs.
+ */
 export default function AppWithConfig() {
   return (
     <AuthProvider
@@ -100,9 +105,11 @@ export default function AppWithConfig() {
             <ThemePreferenceProvider>
               <BrowserRouter>
                 <PerspectiveProvider>
-                  <NotificationsProvider>
-                    <App />
-                  </NotificationsProvider>
+                  <RailBadgeProvider>
+                    <NotificationsProvider>
+                      <App />
+                    </NotificationsProvider>
+                  </RailBadgeProvider>
                 </PerspectiveProvider>
               </BrowserRouter>
             </ThemePreferenceProvider>

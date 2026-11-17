@@ -22,25 +22,38 @@ import DealSection from "./DealSection";
 import ProductsSection from "./ProductsSection";
 import ScheduleSection from "./ScheduleSection";
 import { AddressesSection, JustificationSection, TermsSection } from "./TermsSections";
-import LegalSection from "./LegalSection";
+import LegalSection, { type LegalWriting } from "./LegalSection";
 
 /**
  * Everything the quote says, read-only. The same sheet on the quote page
  * and the Review step. One view for WSO2 staff (2026-09-28); the customer's
- * copy is the generated order form (Document Generation, later).
+ * copy is the generated order form (Document Generation, later). Under a
+ * lens, `writing` puts the reviewer's editor in its place (D129).
  */
-export default function QuoteSheet({ sheet }: { sheet: Sheet }): JSX.Element {
+export default function QuoteSheet({
+  sheet,
+  writing,
+  showJustification = true,
+  onOpenMatrix,
+}: {
+  sheet: Sheet;
+  writing?: LegalWriting;
+  /** Adds "Discount approval matrix" to Products (D176). */
+  onOpenMatrix?: () => void;
+  /** False where the justification is being written, below the sheet (Review, D141). */
+  showJustification?: boolean;
+}): JSX.Element {
   return (
     <Stack spacing={2.5} sx={{ minWidth: 0 }}>
       {/* Who it's for is in the page header (quote page and wizard), not here (C1, 2026-10-14). */}
       <DealSection sheet={sheet} />
-      <ProductsSection sheet={sheet} />
+      <ProductsSection sheet={sheet} onOpenMatrix={onOpenMatrix} />
       <DealFiguresSection sheet={sheet} />
       <ScheduleSection sheet={sheet} />
-      <TermsSection sheet={sheet} />
-      <LegalSection sheet={sheet} />
+      <TermsSection sheet={sheet} specialSlot={writing?.special} />
+      <LegalSection sheet={sheet} writing={writing} />
       <AddressesSection sheet={sheet} />
-      <JustificationSection sheet={sheet} />
+      {showJustification ? <JustificationSection sheet={sheet} /> : null}
     </Stack>
   );
 }

@@ -17,7 +17,7 @@
 import { describe, expect, it } from "vitest";
 import type { AuditEvent, DraftResponse } from "@features/sales/cado2/quotes/api/quoteTypes";
 import { gateway, ready } from "@features/sales/cado2/quotes/testing/fixtures";
-import { compareVersions, describeEvent, groupHistory, quoteLabel, quoteStatusLabel } from "./lifecycle";
+import { compareVersions, describeEvent, groupHistory, quoteLabel, quoteStatusLabel, syncedDraft } from "./lifecycle";
 
 const v2: DraftResponse = {
   ...ready,
@@ -26,8 +26,8 @@ const v2: DraftResponse = {
     versionNumber: 2,
     poNumber: "PO-9",
     lines: [
-      { ...gateway, quantity: 30, discretionaryDiscountPercent: "12.00", annualNet: "9504.00" },
-      { ...gateway, id: 52, pricebookEntryId: "01u000000000002", productName: "WSO2 Support", quantity: 1, unitPrice: "25000", discretionaryDiscountPercent: "0.00" },
+      { ...gateway, quantity: 30, discountPercent: "12.00", discretionaryDiscountPercent: "12.00", annualNet: "9504.00" },
+      { ...gateway, id: 52, pricebookEntryId: "01u000000000002", productName: "WSO2 Support", quantity: 1, unitPrice: "25000", discountPercent: "0.00", discretionaryDiscountPercent: "0.00" },
     ],
     totals: { arr: "34504.00", acv: "34504.00", tcv: "34504.00" },
   },
@@ -83,6 +83,18 @@ const event = (over: Partial<AuditEvent>): AuditEvent => ({
 });
 
 describe("history", () => {
+  // Legal's writing reads as words, saying what it wrote; an unknown event is never a raw code.
+  it("says what Legal wrote, in words", () => {
+    const [both] = groupHistory([event({ eventType: "LEGAL_TERMS_WRITTEN", versionNumber: 2, metadata: { onPrem: true, saas: true, special: false } })]);
+    expect(describeEvent(both)).toBe("Legal wrote the on-premises terms and SaaS terms of version 2");
+    const [all] = groupHistory([event({ eventType: "LEGAL_TERMS_WRITTEN", metadata: { onPrem: true, saas: true, special: true } })]);
+    expect(describeEvent(all)).toBe("Legal wrote the on-premises terms, SaaS terms and special terms of version 1");
+    const [special] = groupHistory([event({ eventType: "LEGAL_TERMS_WRITTEN", metadata: { onPrem: false, saas: false, special: true } })]);
+    expect(describeEvent(special)).toBe("Legal wrote the special terms of version 1");
+    const [unknown] = groupHistory([event({ eventType: "SOME_NEW_EVENT" as AuditEvent["eventType"] })]);
+    expect(describeEvent(unknown)).toBe("Some new event");
+  });
+
   it("groups consecutive saves by the same person on the same version", () => {
     const entries = groupHistory([
       event({ id: 1, eventType: "QUOTE_CREATED" }),
@@ -95,6 +107,16 @@ describe("history", () => {
     expect(entries.map((e) => [e.event.id, e.count])).toEqual([[1, 1], [4, 3], [5, 1], [6, 1]]);
     expect(describeEvent(entries[1])).toBe("Version 1 draft saved ×3");
     expect(describeEvent(entries[3])).toBe("Version 1 submitted · expires 31 Oct 2026");
+  });
+
+  // D127: what Deal Desk did on someone else's quote says so.
+  it("marks what Deal Desk did as Deal Desk", () => {
+    const [revised, submitted] = groupHistory([
+      event({ id: 1, eventType: "VERSION_CREATED", versionNumber: 2, metadata: { actingAs: "DEAL_DESK" } }),
+      event({ id: 2, eventType: "VERSION_SUBMITTED", versionNumber: 2 }),
+    ]);
+    expect(describeEvent(revised)).toBe("Version 2 created (as Deal Desk)");
+    expect(describeEvent(submitted)).toBe("Version 2 submitted");
   });
 
   it("says which draft was deleted", () => {
@@ -178,5 +200,15 @@ describe("Salesforce sync history", () => {
     expect(describeEvent({ event: refused, count: 1 })).toBe(
       "Salesforce refused the sync of version 1: Closed Won opportunities can't be edited",
     );
+  });
+});
+
+// 2026-11-11: a draft synced to Salesforce can't be deleted; a later, never-synced one can.
+describe("syncedDraft", () => {
+  it("is the version last synced, or any version when it isn't recorded", () => {
+    expect(syncedDraft({ sfSyncedAt: null, sfSyncedVersion: null }, 1)).toBe(false);
+    expect(syncedDraft({ sfSyncedAt: "2026-11-10T12:00:00Z", sfSyncedVersion: 1 }, 1)).toBe(true);
+    expect(syncedDraft({ sfSyncedAt: "2026-11-10T12:00:00Z", sfSyncedVersion: 1 }, 2)).toBe(false);
+    expect(syncedDraft({ sfSyncedAt: "2026-11-10T12:00:00Z", sfSyncedVersion: null }, 2)).toBe(true);
   });
 });

@@ -85,7 +85,8 @@ const VISIBLE_SWITCH = {
  *                deal, the partner agreement first (name, partner, date)
  *   Notices      set by Legal; regional and renewal clauses appear by
  *                themselves, each saying why
- *   Special      the special terms, which Legal reviews and may reword
+ *   Special      the AM's special terms (D139); Deal Desk and Legal review
+ *                them during approval and may override them
  */
 export default function LegalStep({ quoteId = null }: { quoteId?: number | null }): JSX.Element {
   const { control } = useFormContext<DraftFormValues>();
@@ -269,13 +270,13 @@ export default function LegalStep({ quoteId = null }: { quoteId?: number | null 
                   onChange={field.onChange}
                   required
                   error={Boolean(specialIssue)}
-                  helperText={specialIssue ?? "Legal reviews these and may reword them during their approval."}
+                  helperText={specialIssue ?? "Deal Desk and Legal check these during approval and may override them."}
                 />
               )}
             />
           ) : (
             <Typography variant="body2" color="text.secondary">
-              Special terms go to Legal for approval.
+              Special terms go to Legal for approval. Deal Desk and Legal may override them.
             </Typography>
           )}
         </Stack>

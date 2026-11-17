@@ -43,6 +43,17 @@ export interface AmplifyMe {
   grants: AmplifyGrant[];
   capabilities: string[];
   linkedin: { status: LinkedInStatus; expiresAt?: string | null };
+  /** Deployment settings from amplify-api's Choreo configs (not from `window.config`). */
+  config: { linkedinOrgUrn: string; privacyNoticeUrl: string; campaignLinkOrigins: string[] };
+}
+
+export interface AmplifyAppConfig {
+  /** WSO2's LinkedIn company page, the owner New Post sends. Empty when amplify-api has none. */
+  linkedinOrgUrn: string;
+  /** Privacy notice link for the consent pop-up. Empty shows plain text. */
+  privacyNoticeUrl: string;
+  /** GET /me `campaignLinkOrigins`: origins a post link may use (`scheme://host[:port]`, lowercase), and the only ones the consent popup follows. */
+  campaignLinkOrigins: string[];
 }
 
 export type CampaignStatus = "SCHEDULED" | "OPEN" | "CLOSED" | "ARCHIVED";
@@ -87,6 +98,8 @@ export interface CampaignPatch {
   title?: string;
   summary?: string;
   imageUrl?: string;
+  /** New link to the post; a blank string clears it. amplify-api applies the allowed-origin rule. */
+  resourceUrl?: string;
   categoryCode?: string;
   isPriority?: boolean;
   closesAt?: string;
@@ -121,6 +134,8 @@ export interface LeaderboardEntry {
   email: string;
   points: number;
   rank: number;
+  /** When the person reached these points (their latest points entry); ties are ordered by it. Only for Amplify dashboard readers. */
+  reachedAt?: string | null;
 }
 
 export interface PersonalStanding {
@@ -133,12 +148,17 @@ export interface PersonalStanding {
 }
 
 export interface TeamEntry {
-  employeeId: string;
+  /**
+   * Null when Amplify sent no id: a member with no points in the period (the team list takes ids from the
+   * points), or who never signed in.
+   */
+  employeeId: string | null;
   displayName: string;
   email: string;
   points: number;
   teamRank: number;
-  companyRank: number;
+  /** Null for a member with no points in the period (no company rank). */
+  companyRank: number | null;
   /** The member's house from the people directory; absent when they have none. */
   houseName?: string | null;
   isMe: boolean;
@@ -156,7 +176,7 @@ export interface Leaderboard {
 export interface TopBoard {
   /** MONTH = this calendar month (UTC); ALL = all time. Set by `leaderboard.top_scope`. */
   period: "MONTH" | "ALL";
-  /** Points needed in the month to qualify for the top three; null for ALL. */
+  /** Always null: the Celebrate top three has no points minimum (ADR-037). */
   minPoints?: number | null;
   monthStart?: string | null;
   monthEnd?: string | null;

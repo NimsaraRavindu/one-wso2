@@ -22,7 +22,7 @@ import type { ApprovalOutcome, ApprovalStep, ApprovalWorkflow } from "@features/
 import { renewalStartWarning } from "@features/sales/cado2/quotes/form/renewalStart";
 
 /** What kind of rule asked for the approval; picks the row's icon. */
-export type ReasonKind = "discount" | "review" | "terms" | "term" | "downsell" | "payment" | "category" | "other";
+export type ReasonKind = "discount" | "review" | "terms" | "term" | "downsell" | "payment" | "other";
 
 /**
  * One reason, split for display. From the backend's sentence
@@ -60,6 +60,10 @@ const RULE: Record<string, { kind: ReasonKind; title: string }> = {
   RENEWAL_DOWNSELL_CEO: { kind: "downsell", title: "Renewal downsell" },
   PAYMENT_TERMS: { kind: "payment", title: "Payment terms" },
   BILLING_FREQUENCY: { kind: "payment", title: "Billing frequency" },
+  // D171: a line charged other than its list price; Deal Desk checks it.
+  SALES_PRICE: { kind: "discount", title: "Sales price changed" },
+  // D177: a discounted line no discount group covers; only Deal Desk checks it.
+  UNCOVERED_DISCOUNT: { kind: "discount", title: "Discount no approver covers" },
 };
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -75,50 +79,27 @@ export function reasonRows(step: ApprovalStep, carried = false): ReasonRow[] {
   for (const t of step.triggers) {
     if (t.rule === "DEAL_DESK_REVIEW" || seen.has(t.reason) || (t.carriedFromVersion != null) !== carried) continue;
     seen.add(t.reason);
-    const rule = RULE[t.rule] ?? { kind: "other" as const, title: "Approval rule" };
     const extra = { ...(t.note ? { note: t.note } : {}), ...(t.carriedFromVersion != null ? { carriedFromVersion: t.carriedFromVersion } : {}) };
-    const split = t.lineNumber > 0 ? t.reason.indexOf(": ") : -1;
-    if (split < 0) {
-      rows.push({ kind: rule.kind, title: rule.title, detail: t.reason, ...extra });
-      continue;
-    }
-    // "Line 2 · Product (Group)" and what about it.
-    const head = t.reason.slice(0, split);
-    const rest = t.reason.slice(split + 2);
-    const grouped = /^(.*) \(([^()]+)\)$/.exec(head);
-    const title = grouped ? grouped[1] : head;
-    const group = grouped ? grouped[2] : undefined;
-    const discount = /^([\d.]+%) discount (.*)$/.exec(rest);
-    rows.push(
-      discount
-        ? { kind: rule.kind, title, group, figure: discount[1], detail: capital(discount[2].replace(/^is /, "")), ...extra }
-        : { kind: rule.kind, title, group, detail: capital(rest), ...extra },
-    );
+    rows.push({ ...parseReason(t.rule, t.lineNumber, t.reason), ...extra });
   }
   return rows;
 }
 
-const CATEGORY_LABEL: Record<string, string> = {
-  SUBSCRIPTION: "Subscription",
-  SUPPORT: "Support",
-  PROFESSIONAL_SERVICE: "Professional Service",
-};
-
-/**
- * For Deal Desk: lines whose category the rep chose because the product isn't
- * mapped, e.g. "Line 3 · WSO2 Onboarding" / "Category chosen by the AM:
- * Professional Service". Deal Desk verifies them (quote-submission.md D46).
- */
-export function repCategoryPoints(
-  lines: readonly { number: number; productName: string; category: string; categoryByRep: boolean }[],
-): ReasonRow[] {
-  return lines
-    .filter((l) => l.categoryByRep)
-    .map((l) => ({
-      kind: "category" as const,
-      title: `Line ${l.number} · ${l.productName}`,
-      detail: `Category chosen by the AM: ${CATEGORY_LABEL[l.category] ?? l.category}`,
-    }));
+/** One backend reason sentence, split for display (see ReasonRow). */
+export function parseReason(ruleCode: string, lineNumber: number, reason: string): ReasonRow {
+  const rule = RULE[ruleCode] ?? { kind: "other" as const, title: "Approval rule" };
+  const split = lineNumber > 0 ? reason.indexOf(": ") : -1;
+  if (split < 0) return { kind: rule.kind, title: rule.title, detail: reason };
+  // "Line 2 · Product (Group)" and what about it.
+  const head = reason.slice(0, split);
+  const rest = reason.slice(split + 2);
+  const grouped = /^(.*) \(([^()]+)\)$/.exec(head);
+  const title = grouped ? grouped[1] : head;
+  const group = grouped ? grouped[2] : undefined;
+  const discount = /^([\d.]+%) discount (.*)$/.exec(rest);
+  return discount
+    ? { kind: rule.kind, title, group, figure: discount[1], detail: capital(discount[2].replace(/^is /, "")) }
+    : { kind: rule.kind, title, group, detail: capital(rest) };
 }
 
 /**

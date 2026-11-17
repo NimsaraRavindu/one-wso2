@@ -61,6 +61,10 @@ import {
   HandshakeIcon,
   WalletIcon,
   ServerIcon,
+  ShoppingBagIcon,
+  ShoppingCartIcon,
+  PackageIcon,
+  BellIcon,
   type LucideIcon,
 } from "@wso2/oxygen-ui-icons-react";
 import type { ComponentType } from "react";
@@ -73,6 +77,7 @@ import {
   ME_FINANCE_APPS,
 } from "@constants/financeApps";
 import { MIS_APPS } from "@constants/misApps";
+import { PROCUREMENT_APPS } from "@constants/procurementApps";
 import { DOWNLOAD_STATS_APPS } from "@constants/downloadStatsApps";
 import { CLAIM_APPROVAL_PATH } from "@features/finance/approvals/claimApprovalTabs";
 import { MARKETING_OPS_APPS } from "@constants/marketingOpsApps";
@@ -85,6 +90,8 @@ import { INFRA_APPS } from "@constants/infraApps";
 import { UMT_PATH, umtPaths } from "@features/umt/lib/umtPaths";
 import { UMT_DOCUMENTATION_ITEM_ID, openUmtDocumentation } from "@features/umt/lib/umtDocumentation";
 import { SMART_SEARCH_LIBRARY_PATH } from "@features/sales/smartSearch/smartSearchPaths";
+import { swagStorePaths } from "@features/swag-store/swagStorePaths";
+import { SWAG_STORE_ADMIN_GROUP_ID, SWAG_STORE_ADMIN_SCREENS } from "@features/swag-store/admin/swagStoreAdminItems";
 import {
   Cado2LogoIcon,
   EchoLogoIcon,
@@ -188,6 +195,20 @@ const BANKING_ADMIN_SECTION: PerspectiveSection = {
   label: "Banking",
   icon: LandmarkIcon,
   path: "/banking/admin",
+};
+
+// Swag Store's admin screens, for the store team. Not a People Ops admin
+// screen: who sees each row is the store's own roles (catalog_manager,
+// fulfilment_ops) from its GET /users/me, decided by the swag-store-admin
+// rail gate, never by the People Ops privileges from ONE_WSO2_PEOPLE_BACKEND_URL.
+// The rows come from the store's screens table, which also says who each one
+// is for.
+const SWAG_STORE_ADMIN_SECTION: PerspectiveSection = {
+  id: SWAG_STORE_ADMIN_GROUP_ID,
+  label: "Swag Store",
+  icon: ShoppingBagIcon,
+  alwaysGroup: true,
+  children: Object.values(SWAG_STORE_ADMIN_SCREENS).map(({ id, label, path }) => ({ id, label, path })),
 };
 
 export const PEOPLE_OPS_SECTIONS: PerspectiveSection[] = [
@@ -355,6 +376,7 @@ export const PEOPLE_OPS_SECTIONS: PerspectiveSection[] = [
     ],
   },
   BANKING_ADMIN_SECTION,
+  ...(isPreviewEnabled("swagStore") ? [SWAG_STORE_ADMIN_SECTION] : []),
 ];
 
 /**
@@ -451,19 +473,22 @@ export const PROMOTION_CYCLE_HISTORY_ITEM_ID = "promotion-cycle-history";
 // Marketing Ops backend's own /api/me. Whatever renders these sections must ask
 // that gate, not just read `requires`.
 //
-// ISAC leads the rail. It is NOT in MARKETING_OPS_APPS, deliberately: that
-// registry is the set of operations this webapp implements, and every item in it
-// resolves to a route we own. ISAC is a separate application that One WSO2 only
+// The Marketing Calendar leads the rail, then ISAC. ISAC is NOT in
+// MARKETING_OPS_APPS, deliberately: that registry is the set of operations this
+// webapp implements, and every item in it resolves to a route we own. ISAC is a separate application that One WSO2 only
 // points at, so it belongs here — where the rail is assembled — rather than in a
 // registry that also feeds the overview page's cards and the capability gate.
 //
 // It is omitted entirely when its URL isn't configured. A rail item that goes
 // nowhere is worse than one that isn't there.
+const MARKETING_OPS_APP_SECTIONS = appsToSections(MARKETING_OPS_APPS);
+const isMarketingCalendar = (section: PerspectiveSection) => section.id === "sec-app-marketing-calendar";
 const MARKETING_OPS_SECTIONS: PerspectiveSection[] = [
+  ...MARKETING_OPS_APP_SECTIONS.filter(isMarketingCalendar),
   ...(isIsacConfigured()
     ? [{ id: "mops-isac", label: "ISAC", icon: SatelliteDishIcon, externalUrl: isacUrl }]
     : []),
-  ...appsToSections(MARKETING_OPS_APPS),
+  ...MARKETING_OPS_APP_SECTIONS.filter((section) => !isMarketingCalendar(section)),
 ];
 
 // The Me home landing. The landing page itself already is the ported
@@ -551,6 +576,16 @@ const AMPLIFY_SECTIONS: PerspectiveSection[] = [
     alwaysGroup: true,
     children: AMPLIFY_DASHBOARD_SECTIONS,
   },
+];
+
+// Swag Store's shop rows: flat leaves, open to every employee. Categories are
+// chips on the Shop page rather than rows here, because the rail shows one
+// level and its labels are plain strings.
+const SWAG_STORE_SHOP_SECTIONS: PerspectiveSection[] = [
+  { id: "swag-store-shop", label: "Shop", icon: ShoppingBagIcon, path: swagStorePaths.shop },
+  { id: "swag-store-cart", label: "Cart", icon: ShoppingCartIcon, path: swagStorePaths.cart },
+  { id: "swag-store-orders", label: "Orders", icon: PackageIcon, path: swagStorePaths.orders },
+  { id: "swag-store-alerts", label: "Alerts", icon: BellIcon, path: swagStorePaths.alerts },
 ];
 
 // Knowledge's one item so far. Its own perspective (not nested under Me)
@@ -644,7 +679,7 @@ const SALES_SECTIONS: PerspectiveSection[] = [
   // CadO2 answers to its own backend (CADO2_ITEM_IDS, the `cado2` adapter).
   // With the flag off the group doesn't exist, so nothing asks that backend.
   // Its group shows CADO2's own logo, as Echo's does (D101).
-  ...(isPreviewEnabled("cado2") ? appsToSections(CADO2_APPS).map((s) => ({ ...s, icon: Cado2LogoIcon })) : []),
+  ...(isPreviewEnabled("quickquote") ? appsToSections(CADO2_APPS).map((s) => ({ ...s, icon: Cado2LogoIcon })) : []),
 ];
 
 /**
@@ -749,6 +784,9 @@ export const PERSPECTIVES: readonly PerspectiveDef[] = [
       // not something everyone has — unlike leave or claims, it is not part of
       // the set every employee needs.
       ...appsToSections(FINANCE_PERSPECTIVE_APPS),
+      // Procurement: purchase requests through to Procurement assignment.
+      // With the flag off the group doesn't exist.
+      ...(isPreviewEnabled("procurement") ? appsToSections(PROCUREMENT_APPS) : []),
       // Due Diligence — also surfaced under Legal (see the `legal` perspective
       // below). ONE registry (DUE_DILIGENCE_APPS), included in both places, so
       // the two rails can't drift. Gated on the due-diligence backend's own
@@ -870,6 +908,22 @@ export const PERSPECTIVES: readonly PerspectiveDef[] = [
         },
       ]
     : []),
+  // Swag Store, held behind its preview flag until the pilot. The top-bar
+  // button opens it too. `forwardsToFirstItem` drops the Overview row: the
+  // landing route is the Shop page itself, which is the first row.
+  ...(isPreviewEnabled("swagStore")
+    ? [
+        {
+          key: "store",
+          label: "Swag Store",
+          icon: ShoppingBagIcon,
+          access: true,
+          path: swagStorePaths.shop,
+          forwardsToFirstItem: true,
+          sections: SWAG_STORE_SHOP_SECTIONS,
+        },
+      ]
+    : []),
   // Download Stats is the first engineering tool (ADR 0001). It is not under
   // Infra Portal: Infra is GitHub administration, and this is release
   // downloads, package downloads, and repository stats. It is an app inside
@@ -896,6 +950,7 @@ export const PERSPECTIVES: readonly PerspectiveDef[] = [
     access: true,
     path: "/infra",
     externallyGated: true,
+    forwardsToFirstItem: true,
     sections: appsToSections(INFRA_APPS),
   },
   // Marketing Ops — UNLOCKED. Ported so far: Utilities (UTM + Asset Name

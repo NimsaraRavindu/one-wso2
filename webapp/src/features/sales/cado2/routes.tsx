@@ -30,12 +30,13 @@ import { FIRST_ADMIN_SECTION } from "./admin/adminSections";
 import ApprovalMatrixPage from "./admin/approval-matrix/pages/ApprovalMatrixPage";
 import ApprovalSlasPage from "./admin/approval-slas/pages/ApprovalSlasPage";
 import LegalEntitiesPage from "./admin/legal-entities/pages/LegalEntitiesPage";
-import CurrenciesPage from "./admin/currencies/pages/CurrenciesPage";
-import ProductCategoriesPage from "./admin/product-categories/pages/ProductCategoriesPage";
-import ProductBundlesPage from "./admin/product-bundles/pages/ProductBundlesPage";
+import ProductClassificationsPage from "./admin/product-classifications/pages/ProductClassificationsPage";
+import SupportPlansPage from "./admin/support-plans/pages/SupportPlansPage";
+import VolumeDiscountsPage from "./admin/volume-discounts/pages/VolumeDiscountsPage";
 import QuoteAccessPage from "./admin/quote-access/pages/QuoteAccessPage";
 import SalesforceSyncPage from "./admin/salesforce-sync/pages/SalesforceSyncPage";
 import EmailNotificationsPage from "./admin/email-notifications/pages/EmailNotificationsPage";
+import QuoteVersionsPage from "./admin/quote-versions/pages/QuoteVersionsPage";
 import PricingFormulasPage from "./admin/pricing-formulas/pages/PricingFormulasPage";
 import PricingFormulaHistoryPage from "./admin/pricing-formulas/pages/PricingFormulaHistoryPage";
 import SupportingDocumentsPage from "./admin/supporting-documents/pages/SupportingDocumentsPage";
@@ -44,6 +45,7 @@ import SupportingDocumentsPage from "./admin/supporting-documents/pages/Supporti
 const QuoteWizardPage = lazy(() => import("./quotes/pages/QuoteWizardPage"));
 const QuoteDetailPage = lazy(() => import("./quotes/pages/QuoteDetailPage"));
 const InsightsPage = lazy(() => import("./insights/pages/InsightsPage"));
+const DeskBoardPage = lazy(() => import("./desk/pages/DeskBoardPage"));
 // Its rich-text editor is heavy too.
 const LegalTextsPage = lazy(() => import("./admin/legal-texts/pages/LegalTextsPage"));
 
@@ -51,12 +53,12 @@ const loading = <Skeleton variant="rounded" height={240} />;
 const deferred = (page: ReactNode) => <Suspense fallback={loading}>{page}</Suspense>;
 
 export const cado2Routes = (
-  <Route path="sales/cado2" element={<Cado2Shell />}>
+  <Route path="sales/quickquote" element={<Cado2Shell />}>
     <Route index element={<Cado2Landing />} />
     <Route
       path="quotes"
       element={
-        <Cado2Requires need="quote">
+        <Cado2Requires need="quotes">
           <MyQuotesPage />
         </Cado2Requires>
       }
@@ -67,7 +69,7 @@ export const cado2Routes = (
     />
     <Route
       path="quotes/:quoteId/versions/:version/edit"
-      element={<Cado2Requires need="quote">{deferred(<QuoteWizardPage />)}</Cado2Requires>}
+      element={<Cado2Requires need="quotes">{deferred(<QuoteWizardPage />)}</Cado2Requires>}
     />
     {/* A quote is open to its owner, CadO2 admins and its approvers; the
         backend decides per quote, so no role guard here. Each tab is a route,
@@ -82,6 +84,7 @@ export const cado2Routes = (
         </Cado2Requires>
       }
     />
+    <Route path="desk" element={<Cado2Requires need="desk">{deferred(<DeskBoardPage />)}</Cado2Requires>} />
     <Route path="insights" element={<Navigate to={cado2Paths.insights()} replace />} />
     <Route
       path="insights/:tab"
@@ -99,14 +102,15 @@ export const cado2Routes = (
       <Route path="approval-matrix" element={<ApprovalMatrixPage />} />
       <Route path="approval-slas" element={<ApprovalSlasPage />} />
       <Route path="legal-entities" element={<LegalEntitiesPage />} />
-      <Route path="currencies" element={<CurrenciesPage />} />
-      <Route path="product-categories" element={<ProductCategoriesPage />} />
-      <Route path="product-bundles" element={<ProductBundlesPage />} />
+      <Route path="product-classifications" element={<ProductClassificationsPage />} />
+      <Route path="support-plans" element={<SupportPlansPage />} />
+      <Route path="volume-discounts" element={<VolumeDiscountsPage />} />
       <Route path="legal-texts" element={deferred(<LegalTextsPage />)} />
       <Route path="supporting-documents" element={<SupportingDocumentsPage />} />
       <Route path="quote-access" element={<QuoteAccessPage />} />
       <Route path="salesforce-sync" element={<SalesforceSyncPage />} />
       <Route path="email-notifications" element={<EmailNotificationsPage />} />
+      <Route path="quote-versions" element={<QuoteVersionsPage />} />
       <Route path="pricing-formulas" element={<PricingFormulasPage />} />
       <Route path="pricing-formulas/:productId" element={<PricingFormulaHistoryPage />} />
       <Route path="*" element={<Navigate to={cado2Paths.adminSection(FIRST_ADMIN_SECTION)} replace />} />

@@ -36,8 +36,8 @@ export interface StepCheck {
   readonly message: string;
 }
 
-const hasContact = (c: ContactValue) =>
-  (c.mode === "salesforce" && Boolean(c.sfContactId)) || (c.mode === "manual" && c.name.trim() !== "");
+// Only a contact from the opportunity counts (D124); one typed in before it doesn't.
+const hasContact = (c: ContactValue) => c.mode === "salesforce" && Boolean(c.sfContactId);
 
 const addressComplete = (a: AddressValue) =>
   Boolean(a.companyName.trim() && a.addressLine1.trim() && a.city.trim() && a.country.trim());
@@ -71,13 +71,16 @@ export function stepChecks(
   // The currency sits with the price book on Products & Pricing.
   need(products, Boolean(v.currencyIsoCode), "currencyIsoCode", "Choose the currency");
   need(products, v.lines.length > 0, "lines", "Add at least one product");
-  // Products brought in from the opportunity wait for a category when unmapped (D72).
-  const uncategorised = v.lines.filter((l) => !l.category).length;
+  // A product whose classification isn't set up can't be quoted (D152):
+  // an Admin sets it up, or the AM removes the line.
+  const notSetUp = v.lines.filter((l) => !l.category).length;
   need(
     products,
-    uncategorised === 0,
+    notSetUp === 0,
     "lines",
-    uncategorised === 1 ? "Choose the category of 1 product" : `Choose the category of ${uncategorised} products`,
+    notSetUp === 1
+      ? "1 product can't be quoted: its classification isn't set up"
+      : `${notSetUp} products can't be quoted: their classification isn't set up`,
   );
   // The contract years: at least Year 1, the last
   // year's end within it, and every product's dates within its own year.
@@ -91,9 +94,17 @@ export function stepChecks(
   });
 
   // Partner-led: the partner's commission, 0 allowed.
+  // With a rate per year (D151), each year's.
   if (isPartnerLed(v) && v.lines.length > 0) {
-    const problem = commissionProblem(v.partnerCommissionPercent);
-    need(products, !problem, "partnerCommissionPercent", problem);
+    if (v.partnerCommissionByYear.length > 0) {
+      v.partnerCommissionByYear.forEach((r, i) => {
+        const problem = commissionProblem(r);
+        need(products, !problem, `partnerCommissionByYear[${i}]`, problem && `Year ${i + 1}: ${problem}`);
+      });
+    } else {
+      const problem = commissionProblem(v.partnerCommissionPercent);
+      need(products, !problem, "partnerCommissionPercent", problem);
+    }
   }
   const commercial: StepCheck[] = [];
   // Commercials opens with billing and payment terms (D86), on every quote (D88).
